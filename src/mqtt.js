@@ -1,8 +1,6 @@
 const mqtt = require('mqtt');
 
-
 // ====== MQTT Client Setup ======
-
 
 const mqttConnect = (mqtt_broker_url, mqttTopic, onDataReceived) => {
     const mqttClient = mqtt.connect(mqtt_broker_url);
@@ -41,6 +39,7 @@ const mqttConnect = (mqtt_broker_url, mqttTopic, onDataReceived) => {
         
             // ถ้าข้อมูลผ่านเงื่อนไขทั้งหมดแล้ว
                 const validData = {
+                    sheetName: "Logs",
                     device_id: data.device_id,
                     hopper_weight_g: data.hopper_weight_g,
                     bowl_weight_g: data.bowl_weight_g,
@@ -57,7 +56,9 @@ const mqttConnect = (mqtt_broker_url, mqttTopic, onDataReceived) => {
         }
     });
 
-    return mqttClient; // คืนค่า mqttClient ออกไปเผื่อเอาไว้ใช้ publish สั่งงาน
+    return mqttClient; 
 };
+
+
 
 module.exports = { mqttConnect };

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เครื่องให้อาหารแมว — แดชบอร์ด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #E8E2CF;
+    --bg-2: #DFD8C2;
+    --surface: #FBF8EF;
+    --ink: #232819;
+    --ink-soft: #5A5947;
+    --line: #CFC7AC;
+    --accent: #C1502E;
+    --accent-ink: #FBF8EF;
+    --sage: #5E7350;
+    --sage-soft: #E4E9DA;
+    --danger: #A63D2B;
+    --shadow: 0 1px 0 rgba(35,40,25,0.06);
+    --radius: 4px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    background-image: radial-gradient(circle at 1px 1px, rgba(35,40,25,0.045) 1px, transparent 0);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: 'IBM Plex Sans Thai', -apple-system, sans-serif;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .wrap{ max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .brand{ display:flex; align-items:center; gap: 14px; }
+  .brand svg{ width: 46px; height: 46px; flex-shrink:0; }
+  h1{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .brand p{ margin: 2px 0 0; color: var(--ink-soft); font-size: 13.5px; }
+
+  /* ---------- Status hero ---------- */
+  .hero{
+    background: var(--ink);
+    color: var(--bg);
+    border-radius: 10px;
+    padding: 26px 28px;
+    display:flex; justify-content: space-between; align-items:center;
+    gap: 24px; flex-wrap: wrap;
+    margin-bottom: 22px;
+    position: relative;
+    overflow:hidden;
+  }
+  .hero::before{
+    content:"";
+    position:absolute; right:-40px; top:-40px; width:200px; height:200px;
+    border-radius:50%;
+    background: radial-gradient(circle, rgba(193,80,46,0.35), transparent 70%);
+  }
+  .hero-left{ position:relative; z-index:1; }
+  .status-row{ display:flex; align-items:center; gap:10px; margin-bottom: 10px; }
+  .dot{ width:9px; height:9px; border-radius:50%; background: var(--ink-soft); flex-shrink:0; }
+  .dot.online{ background:#8FBF6E; box-shadow: 0 0 0 3px rgba(143,191,110,0.25); }
+  .dot.offline{ background: #C1502E; box-shadow: 0 0 0 3px rgba(193,80,46,0.25); }
+  .status-label{ font-size: 12.5px; letter-spacing: .02em; color: #C7C4B2; }
+  .hero h2{
+    font-family: 'Fraunces', serif;
+    font-size: 26px; font-weight: 500; margin: 0 0 4px;
+  }
+  .hero .sub{ color:#B9B6A2; font-size:13.5px; }
+  .hero-fields{
+    position:relative; z-index:1;
+    display:flex; gap: 26px; flex-wrap: wrap;
+  }
+  .hf{ min-width: 88px; }
+  .hf .k{ font-size:11px; color:#B9B6A2; margin-bottom:3px; }
+  .hf .v{ font-family:'IBM Plex Mono', monospace; font-size:19px; }
+
+  /* ---------- Grid cards ---------- */
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 720px){ .grid{ grid-template-columns: 1fr; } }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 22px;
+  }
+  .card h3{
+    font-family:'Fraunces', serif;
+    font-weight:500; font-size:17px; margin: 0 0 4px;
+  }
+  .card .hint{ color: var(--ink-soft); font-size: 12.5px; margin-bottom: 16px; }
+
+  label{ display:block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
+  .field{ margin-bottom: 14px; }
+  input[type=text], input[type=number], input[type=time], select{
+    width:100%; font-family:'IBM Plex Mono', monospace; font-size: 14px;
+    padding: 9px 10px; border:1px solid var(--line); border-radius: var(--radius);
+    background: #fff; color: var(--ink);
+  }
+  select{ appearance: none; -webkit-appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%235A5947'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%235A5947' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 30px;
+  }
+  input:focus, select:focus{ outline: 2px solid var(--accent); outline-offset: 1px; }
+  select:disabled{ color: var(--ink-soft); }
+  .unit-field{ position:relative; }
+  .unit-field input{ padding-right: 34px; }
+  .unit-field .unit{
+    position:absolute; right:10px; top:33px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color: var(--ink-soft);
+    pointer-events:none;
+  }
+
+  .btn{
+    font-family: 'IBM Plex Sans Thai', sans-serif;
+    font-size: 14px; font-weight:500;
+    padding: 10px 16px; border-radius: var(--radius);
+    border: none; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  .btn:hover{ filter: brightness(0.94); }
+  .btn:active{ transform: translateY(1px); }
+  .btn:disabled{ opacity: .55; cursor: not-allowed; }
+  .btn.secondary{
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+  }
+  .btn.secondary:hover{ border-color: var(--ink-soft); }
+
+  .schedule-list{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 14px; }
+  .chip{
+    display:flex; align-items:center; gap:8px;
+    font-family:'IBM Plex Mono', monospace; font-size: 13px;
+    background: var(--sage-soft); color: var(--sage);
+    padding: 6px 6px 6px 12px; border-radius: 999px;
+  }
+  .chip button{
+    background:none; border:none; color: var(--sage); cursor:pointer;
+    font-size: 15px; line-height:1; padding: 2px 5px;
+  }
+  .add-time-row{ display:flex; gap:8px; align-items:flex-end; margin-bottom:16px; }
+  .add-time-row .field{ margin-bottom:0; flex:1; }
+
+  .msg{ font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+  .msg.ok{ color: var(--sage); }
+  .msg.err{ color: var(--danger); }
+
+  /* ---------- History ---------- */
+  .history-card{ background: var(--surface); border:1px solid var(--line); border-radius:8px; padding: 22px 24px; margin-bottom: 18px; }
+  .history-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 14px; flex-wrap:wrap; gap:8px; }
+  .history-head h3{ font-family:'Fraunces', serif; font-weight:500; font-size:18px; margin:0; }
+  .history-head .count{ color: var(--ink-soft); font-size: 12.5px; }
+  .chart-wrap{ position: relative; height: 260px; }
+
+  table{ width:100%; border-collapse: collapse; margin-top: 18px; font-size: 13px; }
+  thead th{
+    text-align:left; font-weight:500; color: var(--ink-soft);
+    border-bottom: 1px solid var(--line); padding: 8px 10px; font-size: 12px;
+  }
+  tbody td{ padding: 8px 10px; border-bottom: 1px solid #EDE7D6; font-family:'IBM Plex Mono', monospace; font-size: 12.5px; }
+  tbody tr:hover{ background: rgba(94,115,80,0.06); }
+  .table-scroll{ overflow-x:auto; }
+
+  .empty{ color: var(--ink-soft); font-size: 13.5px; padding: 20px 0; text-align:center; }
+  .skeleton{ color: var(--ink-soft); font-size: 13px; }
+
+  footer{ text-align:center; color: var(--ink-soft); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="24" r="24" fill="#232819"/>
+        <path d="M24 30c-6 0-10 3-10 6h20c0-3-4-6-10-6z" fill="#E8E2CF"/>
+        <circle cx="24" cy="21" r="8" fill="#E8E2CF"/>
+        <path d="M17 15l1 5M31 15l-1 5" stroke="#232819" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="20.5" cy="21" r="1.2" fill="#232819"/>
+        <circle cx="27.5" cy="21" r="1.2" fill="#232819"/>
+        <path d="M22.5 24.5c1 .8 2 .8 3 0" stroke="#232819" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h1>เครื่องให้อาหารแมว</h1>
+        <p>สถานะเครื่องแบบเรียลไทม์ ผ่าน MQTT + Google Sheet</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- STATUS HERO -->
+  <div class="hero">
+    <div class="hero-left">
+      <div class="status-row">
+        <span class="dot" id="statusDot"></span>
+        <span class="status-label" id="statusLabel">กำลังเชื่อมต่อ…</span>
+      </div>
+      <h2 id="heroDevice">เครื่องให้อาหาร</h2>
+      <div class="sub" id="heroSub">รอข้อมูลจาก /api/feeder-status</div>
+    </div>
+    <div class="hero-fields" id="heroFields"></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="grid">
+    <div class="card">
+      <h3>ให้อาหารตอนนี้</h3>
+      <div class="hint">ส่งคำสั่งไปที่เครื่องผ่าน MQTT ทันที</div>
+      <div class="field">
+        <label for="feedDeviceId">เครื่อง (device_id)</label>
+        <select id="feedDeviceId"><option value="">กำลังโหลดรายชื่อเครื่อง…</option></select>
+      </div>
+      <div class="field unit-field">
+        <label for="feedPortion">ปริมาณอาหาร</label>
+        <input type="number" id="feedPortion" value="20" min="5" max="500" step="5">
+        <span class="unit">กรัม</span>
+      </div>
+      <button class="btn" id="feedNowBtn">ให้อาหารเลย</button>
+      <div class="msg" id="feedMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>ตั้งเวลาให้อาหาร</h3>
+      <div class="hint">กำหนดรอบเวลาให้อาหารอัตโนมัติต่อวัน</div>
+      <div class="field">
+        <label for="schedDeviceId">เครื่อง (device_id)</label>
+        <select id="schedDeviceId"><option value="">กำลังโหลดรายชื่อเครื่อง…</option></select>
+      </div>
+      <div class="schedule-list" id="scheduleList"></div>
+      <div class="add-time-row">
+        <div class="field">
+          <label for="newTime">เพิ่มเวลา</label>
+          <input type="time" id="newTime" value="08:00">
+        </div>
+        <button class="btn secondary" id="addTimeBtn">+ เพิ่ม</button>
+      </div>
+      <button class="btn" id="saveSchedBtn">บันทึกตารางเวลา</button>
+      <div class="msg" id="schedMsg"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="history-card">
+    <div class="history-head">
+      <h3>ประวัติการให้อาหาร</h3>
+      <span class="count" id="historyCount"></span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="historyChart"></canvas>
+    </div>
+    <div class="table-scroll">
+      <table id="historyTable" style="display:none">
+        <thead><tr id="historyHeadRow"></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="historyEmpty">กำลังโหลดประวัติ…</div>
+  </div>
+
+  <footer>อัปเดตสถานะอัตโนมัติทุก 10 วินาที</footer>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+
+  const API_BASE = 'http://localhost:3000';
+  function getApiBase(){ return API_BASE; }
+
+  async function apiGet(path){
+    const res = await fetch(getApiBase() + path);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+  async function apiPost(path, body){
+    const res = await fetch(getApiBase() + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(data.error || data.message || ('HTTP ' + res.status));
+    return data;
+  }
+
+  function fmtLabel(key){
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+  function looksLikeTimestamp(key, val){
+    if(/time|date|updated|created|timestamp/i.test(key)) return true;
+    if(typeof val === 'number' && val > 1000000000000) return true;
+    return false;
+  }
+  function fmtTime(val){
+    let d;
+    if(typeof val === 'number') d = new Date(val < 1e12 ? val * 1000 : val);
+    else d = new Date(val);
+    if(isNaN(d.getTime())) return String(val);
+    return d.toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
+  }
+
+  // ---------- DEVICE DISCOVERY ----------
+  const knownDevices = new Set();
+  function extractDeviceId(obj){
+    if(!obj || typeof obj !== 'object') return null;
+    return obj.device_id || obj.deviceId || obj.device || obj.id || null;
+  }
+  function updateDeviceSelects(){
+    const selects = [$('feedDeviceId'), $('schedDeviceId')];
+    const devices = knownDevices.size ? Array.from(knownDevices).sort() : ['feeder_001'];
+    selects.forEach(sel => {
+      const prev = sel.value;
+      sel.innerHTML = devices.map(d => `<option value="${d}">${d}</option>`).join('');
+      sel.value = devices.includes(prev) ? prev : devices[0];
+    });
+  }
+
+  // ---------- STATUS ----------
+  async function refreshStatus(){
+    try{
+      const res = await apiGet('/api/feeder-status');
+      const data = res.data || {};
+      renderStatus(data, true);
+    }catch(e){
+      renderStatusError(e.message);
+    }
+  }
+
+  function renderStatus(data, ok){
+    const dot = $('statusDot');
+    const label = $('statusLabel');
+    const device = $('heroDevice');
+    const sub = $('heroSub');
+    const fields = $('heroFields');
+    fields.innerHTML = '';
+
+    if(!ok){ return; }
+
+    const statusDevice = extractDeviceId(data);
+    if(statusDevice){ knownDevices.add(String(statusDevice)); updateDeviceSelects(); }
+
+    // find a timestamp-ish field to determine online/offline
+    let tsField = null, tsVal = null;
+    for(const [k,v] of Object.entries(data)){
+      if(looksLikeTimestamp(k, v)){ tsField = k; tsVal = v; break; }
+    }
+    let isRecent = null;
+    if(tsVal !== null){
+      let d = typeof tsVal === 'number' ? new Date(tsVal < 1e12 ? tsVal*1000 : tsVal) : new Date(tsVal);
+      if(!isNaN(d.getTime())){
+        isRecent = (Date.now() - d.getTime()) < 1000 * 60 * 15; // 15 min window
+      }
+    }
+    dot.className = 'dot' + (isRecent === null ? '' : isRecent ? ' online' : ' offline');
+    label.textContent = isRecent === null ? 'เชื่อมต่อสำเร็จ' : (isRecent ? 'ออนไลน์' : 'ไม่มีการอัปเดตล่าสุด');
+
+    device.textContent = data.device_id || data.device || data.name || 'เครื่องให้อาหาร';
+    sub.textContent = tsField ? (fmtLabel(tsField) + ' · ' + fmtTime(tsVal)) : 'ข้อมูลล่าสุดจาก Google Sheet';
+
+    const entries = Object.entries(data).filter(([k]) => k !== tsField);
+    if(entries.length === 0){
+      fields.innerHTML = '<div class="hf"><div class="k">ข้อมูล</div><div class="v">ไม่มีฟิลด์เพิ่มเติม</div></div>';
+    }
+    entries.slice(0, 5).forEach(([k,v]) => {
+      const hf = document.createElement('div');
+      hf.className = 'hf';
+      hf.innerHTML = `<div class="k">${fmtLabel(k)}</div><div class="v">${v === null || v === '' ? '—' : v}</div>`;
+      fields.appendChild(hf);
+    });
+  }
+
+  function renderStatusError(msg){
+    $('statusDot').className = 'dot offline';
+    $('statusLabel').textContent = 'เชื่อมต่อไม่ได้';
+    $('heroDevice').textContent = 'เครื่องให้อาหาร';
+    $('heroSub').textContent = 'เรียก /api/feeder-status ไม่สำเร็จ: ' + msg;
+    $('heroFields').innerHTML = '';
+  }
+
+  // ---------- HISTORY ----------
+  let chartInstance = null;
+
+  async function refreshHistory(){
+    const empty = $('historyEmpty');
+    const table = $('historyTable');
+    empty.style.display = 'block';
+    empty.textContent = 'กำลังโหลดประวัติ…';
+    table.style.display = 'none';
+
+    try{
+      const res = await apiGet('/api/feeder-history');
+      const rows = res.data || [];
+      $('historyCount').textContent = rows.length ? (rows.length + ' รายการ') : '';
+      let devicesAdded = false;
+      rows.forEach(r => { const d = extractDeviceId(r); if(d){ knownDevices.add(String(d)); devicesAdded = true; } });
+      if(devicesAdded) updateDeviceSelects();
+      if(!rows.length){
+        empty.textContent = 'ยังไม่มีประวัติการให้อาหาร';
+        renderChart([]);
+        return;
+      }
+      empty.style.display = 'none';
+      renderChart(rows);
+      renderTable(rows);
+    }catch(e){
+      empty.style.display = 'block';
+      empty.textContent = 'เรียก /api/feeder-history ไม่สำเร็จ: ' + e.message;
+      renderChart([]);
+    }
+  }
+
+  function pickField(rows, matcher){
+    const keys = Object.keys(rows[0] || {});
+    return keys.find(matcher) || null;
+  }
+
+  function renderChart(rows){
+    const ctx = document.getElementById('historyChart');
+    if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+    if(!rows.length) return;
+
+    const tsKey = pickField(rows, k => /time|date|updated|created|timestamp/i.test(k)) || Object.keys(rows[0])[0];
+    const numKey = pickField(rows, k => k !== tsKey && /portion|level|amount|weight|count|value|qty/i.test(k))
+      || Object.keys(rows[0]).find(k => k !== tsKey && typeof rows[0][k] === 'number');
+
+    const labels = rows.map(r => {
+      const v = r[tsKey];
+      const d = typeof v === 'number' ? new Date(v < 1e12 ? v*1000 : v) : new Date(v);
+      return isNaN(d.getTime()) ? String(v) : d.toLocaleString('th-TH', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    });
+
+    if(!numKey){
+      // no numeric field found — plot event count instead, nothing fancy
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'เหตุการณ์', data: rows.map(()=>1), backgroundColor: '#C1502E' }] },
+        options: baseChartOptions('เหตุการณ์ให้อาหาร')
+      });
+      return;
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: fmtLabel(numKey),
+          data: rows.map(r => Number(r[numKey])),
+          borderColor: '#C1502E',
+          backgroundColor: 'rgba(193,80,46,0.12)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointBackgroundColor: '#C1502E'
+        }]
+      },
+      options: baseChartOptions(fmtLabel(numKey))
+    });
+  }
+
+  function baseChartOptions(yLabel){
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { backgroundColor: '#232819', titleFont:{family:"'IBM Plex Mono', monospace"}, bodyFont:{family:"'IBM Plex Mono', monospace"} }
+      },
+      scales: {
+        x: { grid: { display:false }, ticks: { color:'#5A5947', font:{ family:"'IBM Plex Sans Thai', sans-serif", size:11 }, maxRotation:0, autoSkip:true } },
+        y: { title: { display:true, text:yLabel, color:'#5A5947', font:{ family:"'IBM Plex Sans Thai', sans-serif", size:11 } },
+             grid: { color:'#EDE7D6' }, ticks: { color:'#5A5947', font:{ family:"'IBM Plex Mono', monospace", size:11 } } }
+      }
+    };
+  }
+
+  function renderTable(rows){
+    const head = $('historyHeadRow');
+    const body = $('historyBody');
+    const table = $('historyTable');
+    const keys = Object.keys(rows[0] || {});
+    head.innerHTML = keys.map(k => `<th>${fmtLabel(k)}</th>`).join('');
+    const recent = rows.slice(-20).reverse();
+    body.innerHTML = recent.map(r =>
+      '<tr>' + keys.map(k => `<td>${r[k] === null || r[k] === undefined || r[k] === '' ? '—' : r[k]}</td>`).join('') + '</tr>'
+    ).join('');
+    table.style.display = 'table';
+  }
+
+  // ---------- FEED NOW ----------
+  $('feedNowBtn').addEventListener('click', async () => {
+    const btn = $('feedNowBtn');
+    const msg = $('feedMsg');
+    const device_id = $('feedDeviceId').value;
+    const grams = Number($('feedPortion').value) || 0;
+    if(!device_id){ msg.className = 'msg err'; msg.textContent = 'กรุณาเลือกเครื่อง'; return; }
+    if(grams <= 0){ msg.className = 'msg err'; msg.textContent = 'กรุณาระบุปริมาณอาหาร'; return; }
+    btn.disabled = true; msg.className = 'msg'; msg.textContent = 'กำลังส่งคำสั่ง…';
+    try{
+      await apiPost('/api/feeder/feed-now', { device_id, portion: grams });
+      msg.className = 'msg ok'; msg.textContent = 'ส่งคำสั่งให้อาหารสำเร็จ';
+      setTimeout(refreshStatus, 1500);
+    }catch(e){
+      msg.className = 'msg err'; msg.textContent = 'ล้มเหลว: ' + e.message;
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- SCHEDULE ----------
+  let schedules = ['08:00', '18:00'];
+
+  function renderSchedules(){
+    const list = $('scheduleList');
+    list.innerHTML = '';
+    if(!schedules.length){
+      list.innerHTML = '<span style="color:var(--ink-soft); font-size:13px;">ยังไม่มีเวลาที่ตั้งไว้</span>';
+      return;
+    }
+    schedules.forEach((t, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `${t} <button aria-label="ลบเวลา ${t}" data-i="${i}">×</button>`;
+      list.appendChild(chip);
+    });
+    list.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        schedules.splice(Number(b.dataset.i), 1);
+        renderSchedules();
+      });
+    });
+  }
+  renderSchedules();
+
+  $('addTimeBtn').addEventListener('click', () => {
+    const t = $('newTime').value;
+    if(t && !schedules.includes(t)){
+      schedules.push(t);
+      schedules.sort();
+      renderSchedules();
+    }
+  });
+
+  $('saveSchedBtn').addEventListener('click', async () => {
+    const btn = $('saveSchedBtn');
+    const msg = $('schedMsg');
+    const device_id = $('schedDeviceId').value;
+    if(!device_id){ msg.className = 'msg err'; msg.textContent = 'กรุณาเลือกเครื่อง'; return; }
+    if(!schedules.length){ msg.className = 'msg err'; msg.textContent = 'เพิ่มอย่างน้อย 1 เวลา'; return; }
+    btn.disabled = true; msg.className = 'msg'; msg.textContent = 'กำลังบันทึก…';
+    try{
+      await apiPost('/api/feeder/schedule', { device_id, schedules });
+      msg.className = 'msg ok'; msg.textContent = 'บันทึกตารางเวลาสำเร็จ';
+    }catch(e){
+      msg.className = 'msg err'; msg.textContent = 'ล้มเหลว: ' + e.message;
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- INIT ----------
+  updateDeviceSelects();
+  refreshStatus();
+  refreshHistory();
+  setInterval(refreshStatus, 10000);
+  setInterval(refreshHistory, 30000);
+})();
+</script>
+</body>
+</html>
