@@ -21,32 +21,31 @@
 <body class="bg-gray-100 text-gray-800 min-h-screen">
 
   <!-- Navbar -->
-  <nav class="bg-indigo-600 text-white shadow-md">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-      <h1 class="text-xl font-bold flex items-center gap-2">
-        🐱 Cat Feeder Dashboard <span class="text-xs bg-indigo-500 px-2 py-1 rounded">by Ae-21</span>
-      </h1>
-      <div class="flex items-center gap-3">
-        <label for="deviceSelect" class="text-sm font-medium">เลือกเครื่อง:</label>
-        <select id="deviceSelect" onchange="changeDevice()"
-          class="bg-indigo-700 text-white px-3 py-1.5 rounded-lg border border-indigo-500 focus:outline-none">
-          <option value="">กำลังโหลดรายชื่อ...</option>
-        </select>
-      </div>
+<nav class="bg-orange-500 text-white shadow-md">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+    <h1 class="text-xl font-bold flex items-center gap-2">
+      🐱 Cat Feeder Dashboard <span class="text-xs bg-orange-400 px-2 py-1 rounded">by Ae-21</span>
+    </h1>
+    <div class="flex items-center gap-3">
+      <label for="deviceSelect" class="text-sm font-medium">เลือกเครื่อง:</label>
+      <select id="deviceSelect" onchange="changeDevice()"
+  class="bg-orange-50 text-orange-900 px-3.5 py-2 rounded-xl border-2 border-orange-200 shadow-sm font-medium focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer">
+  <option value="">🐱 กำลังโหลดรายชื่อ...</option>
+</select>
     </div>
-  </nav>
-
+  </div>
+</nav>
   <!-- Main Content -->
   <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-6">
 
     <!-- Card 1: Latest Status -->
-    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-      <h2 class="text-lg font-semibold mb-4 text-indigo-600 flex items-center gap-2">📊 สถานะล่าสุด</h2>
+   <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
+      <h2 class="text-lg font-semibold mb-4 text-orange-600 flex items-center gap-2">📊 สถานะล่าสุด</h2>
       <div id="statusContainer" class="space-y-3">
         <p class="text-gray-500 text-sm">กำลังโหลดข้อมูล...</p>
       </div>
       <button onclick="fetchLatestStatus()"
-        class="mt-5 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium transition">
+        class="mt-5 w-full bg-orange-50 hover:bg-orange-100 text-orange-700 py-2 rounded-xl text-sm font-medium transition border border-orange-200">
         🔄 รีเฟรชสถานะ
       </button>
     </div>

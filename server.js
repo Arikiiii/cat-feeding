@@ -1,5 +1,4 @@
-
-// Import the functions from sheet.js
+// Import the functions from sheet.js / models
 const { mqttConnect } = require('./src/mqtt.js');
 const { 
     getDataFromGoogleSheet, 
@@ -7,47 +6,43 @@ const {
     getDataByDeviceId,
     updateDeviceSchedule,
     getSchedulesFromSheet
- } = require('./src/sheet.js');
+ } = require('./src/models/deviceModel.js');
 
-// Import epress and create an instance of it
+// Import express and create an instance of it
 const express = require('express');
-const path = require('path')
+const path = require('path');
 const cors = require('cors');
 const app = express();
 const port = 3000;
 
-
-
 // ====== MQTT Configuration ======
-const mqtt_broker_url = 'mqtt://broker.hivemq.com:1883';
+// const mqtt_broker_url = 'mqtt://broker.hivemq.com:1883';
+const mqtt_broker_url = 'mqtt://localhost:1883';
 const mqttTopic = 'catfeeder/control/status';
 
-
 // ====== MQTT Client Setup =====
-
 const client = mqttConnect(mqtt_broker_url, mqttTopic, (cleanData) => {
-    console.log('📦 Data ready for Google Sheet:', cleanData);
-    // เอา cleanData ไปยิงเข้า Google Sheets ต่อตรงนี้ได้เลย!
-    console.log('Sending data to Google Sheet...');
-    sendDataToGoogleSheet(cleanData);
+    console.log('📦 Data ready for SQLite:', cleanData);
+    console.log('Saving data to SQLite database...');
+    sendDataToGoogleSheet(cleanData); // ชื่อฟังก์ชันเดิม แต่ข้างในบันทึกลง SQLite แล้ว
 });
 
 // ====== Express Middleware Setup ======
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname,'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 
 //==========================================
-// GET 
+// GET API Endpoints (เอา async/await ออก เพราะ SQLite เป็น Synchronous)
 
-// ====== API Endpoint to Get Latest Feeder Status from Google Sheet ======
-app.get('/api/feeder/latest', async (req, res) => {
+// ====== API Endpoint to Get Latest Feeder Status ======
+app.get('/api/feeder/latest', (req, res) => {
     try {
         const targetDeviceId = req.query.device_id; // เช่น ?device_id=cat_feeder_01
 
-        // เรียกใช้ฟังก์ชันและส่ง device_id เข้าไปกรอง
-        const data = await getDataFromGoogleSheet(targetDeviceId);
+        // เรียกใช้ฟังก์ชัน SQLite แบบปกติ (ไม่ต้อง await)
+        const data = getDataFromGoogleSheet(targetDeviceId);
 
         if (!data) {
             return res.status(404).json({ success: false, message: 'Data not found' });
@@ -60,14 +55,12 @@ app.get('/api/feeder/latest', async (req, res) => {
     }
 });
 
-// ====== API Endpoint to Get Feeder History from Google Sheet for >> ======
-app.get('/api/feeder/history', async (req, res) => {
+// ====== API Endpoint to Get Feeder History ======
+app.get('/api/feeder/history', (req, res) => {
     try {
-        // 🎯 ดึง deviceId จาก Query String (ถ้ามี) เช่น /api/feeder/history?deviceId=cat_feeder_01
         const targetDeviceId = req.query.deviceId;
 
-        // เรียกใช้ฟังก์ชันและส่ง deviceId เข้าไปกรอง
-        const historyData = await getDataByDeviceId(targetDeviceId);
+        const historyData = getDataByDeviceId(targetDeviceId);
         
         res.json({
             success: true,
@@ -81,12 +74,10 @@ app.get('/api/feeder/history', async (req, res) => {
 });
 
 // Endpoint สำหรับดึงตารางเวลาทั้งหมด หรือระบุเฉพาะ Device ID
-app.get('/api/feeder/devices', async (req, res) => {
+app.get('/api/feeder/devices', (req, res) => {
     try {
-        // ใช้ฟังก์ชันดึงประวัติทั้งหมดที่มีอยู่แล้ว
-        const historyData = await getDataByDeviceId(); 
+        const historyData = getDataByDeviceId(); 
         
-        // ดึงเฉพาะ deviceId และกรองตัวที่ซ้ำกันออก
         const uniqueDevices = [...new Set(historyData.map(item => item.deviceId))].filter(Boolean);
 
         res.json({
@@ -98,13 +89,11 @@ app.get('/api/feeder/devices', async (req, res) => {
     }
 });
 
-
-app.get('/api/feeder/get-schedule', async (req, res) => {
+app.get('/api/feeder/get-schedule', (req, res) => {
     try {
         const targetDeviceId = req.query.device_id; 
 
-        // เรียกใช้ฟังก์ชันที่เราแยกไว้
-        const data = await getSchedulesFromSheet(targetDeviceId);
+        const data = getSchedulesFromSheet(targetDeviceId);
 
         res.status(200).json({
             success: true,
@@ -117,30 +106,26 @@ app.get('/api/feeder/get-schedule', async (req, res) => {
         res.status(statusCode).json({ success: false, error: error.message });
     }
 });
+
 // ====== API Endpoint to Send Feed Command to ESP32 via MQTT ======
 const TOPIC_COMMAND = 'catfeeder/control/command';
 
 //=========================================
-// POST
-
+// POST API Endpoints
 
 app.post('/api/feeder/feed-now', (req, res) => {
-
-    // data example: { "device_id": "feeder_001", "portion": 2  (count of portions to feed) }
     const { device_id, portion } = req.body;
 
     if (!device_id) {
         return res.status(400).json({ error: 'Missing device_id' });
     }
 
-    // สร้างคำสั่งรูปแบบ JSON ส่งไปให้ ESP32
     const commandPayload = JSON.stringify({
         action: 'feed_now',
-        portion: portion || 1, // ค่าเริ่มต้น 1 ส่วน
+        portion: portion || 1,
         timestamp: Date.now()
     });
 
-    // Publish คำสั่งออกไปที่ Topic ของ ESP32
     client.publish(TOPIC_COMMAND, commandPayload, (err) => {
         if (err) {
             console.error('❌ Failed to publish command:', err);
@@ -151,39 +136,31 @@ app.post('/api/feeder/feed-now', (req, res) => {
     });
 });
 
-
-
-// ตัวอย่าง Express Endpoint สำหรับรับค่ากดเปลี่ยนเวลาจากหน้าเว็บ
-app.post('/api/feeder/set-schedule', async (req, res) => {
+app.post('/api/feeder/set-schedule', (req, res) => {
     const { device_id, times } = req.body; 
-    // ตัวอย่าง Body ที่หน้าเว็บจะส่งมา: { "device_id": "cat_feeder_01", "times": ["08:00", "17:00"] }
 
     if (!device_id || !times) {
         return res.status(400).json({ success: false, message: 'Missing device_id or times' });
     }
 
-    // เรียกใช้ฟังก์ชันด้านบน
-    const result = await updateDeviceSchedule(device_id, times);
+    // เรียกฟังก์ชันอัปเดตตารางเวลา (SQLite)
+    const result = updateDeviceSchedule(device_id, times);
 
-    if (result && result.status === 'success') {
-        res.status(200).json({ success: true, message: 'Schedule updated successfully (old data replaced)' });
+    if (result && result.success) {
+        res.status(200).json({ success: true, message: 'Schedule updated successfully in SQLite' });
     } else {
-        res.status(500).json({ success: false, message: 'Failed to update schedule in Google Sheets' });
+        res.status(500).json({ success: false, message: 'Failed to update schedule in SQLite' });
     }
 });
 
-
-
 //=========================================
-// Serve the static HTML file for the web interface
+// Serve static files & Start Server
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-// Start the Express server
+
 app.listen(port, () => {
     console.log(`Hello , Welcome to Cat Feeder Control Server!`);
     console.log(`By : Ae-21 Dev.กากๆ`);
     console.log(`🚀 Server is running on http://localhost:${port}`);
 });
-
-
