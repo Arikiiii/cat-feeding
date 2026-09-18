@@ -4,7 +4,7 @@ const { mqttConnect } = require('./src/mqtt.js');
 const { 
     getDataFromGoogleSheet, 
     sendDataToGoogleSheet,
-    getAllDataFromGoogleSheet,
+    getDataByDeviceId,
     updateDeviceSchedule,
     getSchedulesFromSheet
  } = require('./src/sheet.js');
@@ -38,6 +38,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname,'public')));
 
 
+//==========================================
+// GET 
+
 // ====== API Endpoint to Get Latest Feeder Status from Google Sheet ======
 app.get('/api/feeder/latest', async (req, res) => {
     try {
@@ -60,9 +63,15 @@ app.get('/api/feeder/latest', async (req, res) => {
 // ====== API Endpoint to Get Feeder History from Google Sheet for >> ======
 app.get('/api/feeder/history', async (req, res) => {
     try {
-        const historyData = await getAllDataFromGoogleSheet();
+        // 🎯 ดึง deviceId จาก Query String (ถ้ามี) เช่น /api/feeder/history?deviceId=cat_feeder_01
+        const targetDeviceId = req.query.deviceId;
+
+        // เรียกใช้ฟังก์ชันและส่ง deviceId เข้าไปกรอง
+        const historyData = await getDataByDeviceId(targetDeviceId);
+        
         res.json({
             success: true,
+            filter: targetDeviceId || 'ALL',
             count: historyData.length,
             data: historyData
         });
@@ -71,8 +80,50 @@ app.get('/api/feeder/history', async (req, res) => {
     }
 });
 
+// Endpoint สำหรับดึงตารางเวลาทั้งหมด หรือระบุเฉพาะ Device ID
+app.get('/api/feeder/devices', async (req, res) => {
+    try {
+        // ใช้ฟังก์ชันดึงประวัติทั้งหมดที่มีอยู่แล้ว
+        const historyData = await getDataByDeviceId(); 
+        
+        // ดึงเฉพาะ deviceId และกรองตัวที่ซ้ำกันออก
+        const uniqueDevices = [...new Set(historyData.map(item => item.deviceId))].filter(Boolean);
+
+        res.json({
+            success: true,
+            data: uniqueDevices
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+app.get('/api/feeder/get-schedule', async (req, res) => {
+    try {
+        const targetDeviceId = req.query.device_id; 
+
+        // เรียกใช้ฟังก์ชันที่เราแยกไว้
+        const data = await getSchedulesFromSheet(targetDeviceId);
+
+        res.status(200).json({
+            success: true,
+            data: data
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching schedule:', error.message);
+        const statusCode = error.message.includes('not found') ? 404 : 500;
+        res.status(statusCode).json({ success: false, error: error.message });
+    }
+});
 // ====== API Endpoint to Send Feed Command to ESP32 via MQTT ======
 const TOPIC_COMMAND = 'catfeeder/control/command';
+
+//=========================================
+// POST
+
+
 app.post('/api/feeder/feed-now', (req, res) => {
 
     // data example: { "device_id": "feeder_001", "portion": 2  (count of portions to feed) }
@@ -121,27 +172,10 @@ app.post('/api/feeder/set-schedule', async (req, res) => {
     }
 });
 
-// Endpoint สำหรับดึงตารางเวลาทั้งหมด หรือระบุเฉพาะ Device ID
-app.get('/api/feeder/get-schedule', async (req, res) => {
-    try {
-        const targetDeviceId = req.query.device_id; 
-
-        // เรียกใช้ฟังก์ชันที่เราแยกไว้
-        const data = await getSchedulesFromSheet(targetDeviceId);
-
-        res.status(200).json({
-            success: true,
-            data: data
-        });
-
-    } catch (error) {
-        console.error('❌ Error fetching schedule:', error.message);
-        const statusCode = error.message.includes('not found') ? 404 : 500;
-        res.status(statusCode).json({ success: false, error: error.message });
-    }
-});
 
 
+//=========================================
+// Serve the static HTML file for the web interface
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

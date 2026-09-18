@@ -143,11 +143,11 @@ const getDataFromGoogleSheet = async (targetDeviceId = null) => {
     }
 };
 // ฟังก์ชันดึงประวัติข้อมูลทั้งหมดจาก Google Sheet
-const getAllDataFromGoogleSheet = async () => {
+const getDataByDeviceId = async (targetDeviceId) => {
     try {
         const response = await axios.get(google_sheet_url);
         
-        // 🔍 ป้องกันเคสที่ response.data ไม่ใช่อาเรย์ตรงๆ (เช่น อาจจะอยู่ใน response.data.data)
+        // 🔍 ป้องกันเคสที่ response.data ไม่ใช่อาเรย์ตรงๆ
         let rows = response.data;
         if (rows && !Array.isArray(rows) && Array.isArray(rows.data)) {
             rows = rows.data;
@@ -156,13 +156,13 @@ const getAllDataFromGoogleSheet = async () => {
         // เช็คความถูกต้องอีกรอบว่าเป็นอาเรย์แน่ๆ และมีข้อมูลพอไหม
         if (!Array.isArray(rows) || rows.length < 2) {
             console.warn('⚠️ ข้อมูลใน Google Sheet ว่างเปล่า หรือรูปแบบไม่ถูกต้อง:', response.data);
-            return null;
+            return [];
         }
 
-        const headers = rows[0]; // เก็บหัวตารางไว้เผื่อใช้งาน
+        const headers = rows[0]; // เก็บหัวตารางไว้
         const dataRows = rows.slice(1); // ตัดหัวตารางออก เอาเฉพาะข้อมูลข้างล่าง
 
-        // แปลงทุกแถวให้อยู่ในรูป Object ที่อ่านง่าย
+        // แปลงทุกแถวให้อยู่ในรูป Object
         const allFormattedData = dataRows.map((row) => {
             return {
                 timestamp: row[0],
@@ -173,12 +173,17 @@ const getAllDataFromGoogleSheet = async () => {
             };
         });
 
-        console.log(`Retrieved ${allFormattedData.length} records.`);
-        console.log(' Get ✅ : all successfully from Google Sheet');
-        console.log(' get-all data ✅ : successfully from Google Sheet');
-        return allFormattedData; // ส่งออกเป็น Array ของข้อมูลทั้งหมด
+        // 🎯 กรองเฉพาะ deviceId ที่ต้องการ (ถ้าส่งมา) ถ้าไม่ได้ส่งมาให้คืนค่าทั้งหมด
+        const filteredData = targetDeviceId 
+            ? allFormattedData.filter(item => item.deviceId === targetDeviceId)
+            : allFormattedData;
+
+        console.log(`Retrieved ${filteredData.length} records for device: ${targetDeviceId || 'ALL'}.`);
+        console.log(' Get ✅ : successfully from Google Sheet');
+        
+        return filteredData; // ส่งออกเป็น Array ของข้อมูลเฉพาะ device_id นั้นๆ
     } catch (error) {
-        console.error('Error retrieving all data from Google Sheet:', error);
+        console.error('Error retrieving data by deviceId from Google Sheet:', error);
         return [];
     }
 };
@@ -194,4 +199,4 @@ const sendDataToGoogleSheet = async (data) => {
     }
 };
 
-module.exports = { getDataFromGoogleSheet, getAllDataFromGoogleSheet, sendDataToGoogleSheet , updateDeviceSchedule, getSchedulesFromSheet}; 
+module.exports = { getDataFromGoogleSheet, sendDataToGoogleSheet , updateDeviceSchedule, getSchedulesFromSheet , getDataByDeviceId}; 
