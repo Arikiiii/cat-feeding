@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat Feeder Control Dashboard</title>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts (Prompt) -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Prompt', sans-serif;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+
+  <!-- Navbar -->
+<nav class="bg-orange-500 text-white shadow-md">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+    <h1 class="text-xl font-bold flex items-center gap-2">
+      🐱 Cat Feeder Dashboard <span class="text-xs bg-orange-400 px-2 py-1 rounded">by Ae-21</span>
+    </h1>
+    <div class="flex items-center gap-3">
+      <label for="deviceSelect" class="text-sm font-medium">เลือกเครื่อง:</label>
+      <select id="deviceSelect" onchange="changeDevice()"
+  class="bg-orange-50 text-orange-900 px-3.5 py-2 rounded-xl border-2 border-orange-200 shadow-sm font-medium focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-200 transition-all cursor-pointer">
+  <option value="">🐱 กำลังโหลดรายชื่อ...</option>
+</select>
+    </div>
+  </div>
+</nav>
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <!-- Card 1: Latest Status -->
+   <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
+      <h2 class="text-lg font-semibold mb-4 text-orange-600 flex items-center gap-2">📊 สถานะล่าสุด</h2>
+      <div id="statusContainer" class="space-y-3">
+        <p class="text-gray-500 text-sm">กำลังโหลดข้อมูล...</p>
+      </div>
+      <button onclick="fetchLatestStatus()"
+        class="mt-5 w-full bg-orange-50 hover:bg-orange-100 text-orange-700 py-2 rounded-xl text-sm font-medium transition border border-orange-200">
+        🔄 รีเฟรชสถานะ
+      </button>
+    </div>
+
+    <!-- Card 2: Control Feed Now -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+      <h2 class="text-lg font-semibold mb-4 text-emerald-600 flex items-center gap-2">⚡ สั่งให้อาหารทันที</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">จำนวนส่วน (Portion)</label>
+          <input type="number" id="portionInput" value="1" min="1" max="5"
+            class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        </div>
+        <button onclick="feedNow()"
+          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium shadow-md transition">
+          🐾 ให้อาหารเดี๋ยวนี้!
+        </button>
+        <p id="feedResult" class="text-xs text-center text-gray-500 mt-2"></p>
+      </div>
+    </div>
+
+    <!-- Card 3: Schedule Management -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+      <h2 class="text-lg font-semibold mb-4 text-amber-600 flex items-center gap-2">⏰ ตั้งเวลาให้อาหาร</h2>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">เวลา (คั่นด้วยจุลภาค เช่น 08:00,18:00)</label>
+          <input type="text" id="scheduleInput" placeholder="08:00, 18:00"
+            class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        </div>
+        <button onclick="saveSchedule()"
+          class="w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-xl font-medium shadow-md transition">
+          💾 บันทึกตารางเวลา
+        </button>
+        <button onclick="fetchSchedule()"
+          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium transition">
+          📥 โหลดเวลาเดิม
+        </button>
+        <p id="scheduleResult" class="text-xs text-center text-gray-500"></p>
+      </div>
+    </div>
+
+  </main>
+  <!-- Card Chart Section -->
+  <section class="max-w-7xl mx-auto px-4 pb-12">
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">📈 กราฟแสดงพฤติกรรม (Weight Analytics)
+        </h2>
+
+        <!-- ปุ่มเลือกช่วงเวลา -->
+        <select id="timeFilter" onchange="applyTimeFilter()"
+          class="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
+          <option value="all">ทั้งหมด (All time)</option>
+          <option value="day">รายวัน (24 ชม. ล่าสุด)</option>
+          <option value="week">รายสัปดาห์ (7 วันล่าสุด)</option>
+          <option value="month">รายเดือน (30 วันล่าสุด)</option>
+          <option value="year">รายปี (365 วันล่าสุด)</option>
+        </select>
+      </div>
+
+      <div class="relative w-full h-72">
+        <canvas id="feederChart"></canvas>
+      </div>
+    </div>
+  </section>
+  <!-- History Table Section -->
+  <section class="max-w-7xl mx-auto px-4 pb-12">
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">📜 ประวัติการทำงานย้อนหลัง (History
+          Logs)</h2>
+        <button onclick="fetchHistory()"
+          class="text-sm bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">โหลดประวัติใหม่</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+              <th class="p-3">เวลา (Timestamp)</th>
+              <th class="p-3">Device ID</th>
+              <th class="p-3">ระดับถัง (g)</th>
+              <th class="p-3">น้ำหนักชาม (g)</th>
+              <th class="p-3">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody" class="text-sm divide-y divide-gray-100">
+            <tr>
+              <td colspan="5" class="p-4 text-center text-gray-400">กำลังโหลดประวัติ...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- JavaScript Client Logic -->
+  <!-- JavaScript Client Logic -->
+  <script>
+    const API_BASE = ''; // ใช้โดเมนเดียวกันเพราะรันบน Express server ตัวเดียวกัน
+
+    function getCurrentDevice() {
+      return document.getElementById('deviceSelect').value;
+    }
+
+    // 1. ดึงสถานะล่าสุด
+    async function fetchLatestStatus() {
+      const deviceId = getCurrentDevice();
+      const container = document.getElementById('statusContainer');
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/latest?device_id=${deviceId}`);
+        const json = await res.json();
+
+        if (json.success && json.data) {
+          const d = json.data;
+          container.innerHTML = `
+                        <div class="bg-gray-50 p-3 rounded-xl flex justify-between"><span class="text-gray-500">Device:</span> <span class="font-semibold">${d.deviceId || deviceId}</span></div>
+                        <div class="bg-gray-50 p-3 rounded-xl flex justify-between"><span class="text-gray-500">น้ำหนักถัง:</span> <span class="font-semibold text-indigo-600">${d.hopperWeight || d.hopper_weight_g || 0} g</span></div>
+                        <div class="bg-gray-50 p-3 rounded-xl flex justify-between"><span class="text-gray-500">น้ำหนักชาม:</span> <span class="font-semibold text-indigo-600">${d.bowlWeight || d.bowl_weight_g || 0} g</span></div>
+                        <div class="bg-gray-50 p-3 rounded-xl flex justify-between"><span class="text-gray-500">สถานะ:</span> <span class="px-2 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700">${d.status || 'OK'}</span></div>
+                    `;
+        } else {
+          container.innerHTML = `<p class="text-amber-500 text-sm">ไม่พบข้อมูลล่าสุดของ ${deviceId}</p>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<p class="text-red-500 text-sm">เกิดข้อผิดพลาดในการโหลด</p>`;
+      }
+    }
+
+    // 2. สั่งให้อาหารทันที
+    async function feedNow() {
+      const deviceId = getCurrentDevice();
+      const portion = parseInt(document.getElementById('portionInput').value) || 1;
+      const resMsg = document.getElementById('feedResult');
+
+      resMsg.innerText = "⏳ กำลังส่งคำสั่ง...";
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/feed-now`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: deviceId, portion: portion })
+        });
+        const json = await res.json();
+        if (json.success) {
+          resMsg.innerText = "✅ ส่งคำสั่งสำเร็จแล้ว!";
+          resMsg.className = "text-xs text-center text-green-600 mt-2 font-medium";
+        } else {
+          resMsg.innerText = "❌ ส่งคำสั่งไม่สำเร็จ";
+          resMsg.className = "text-xs text-center text-red-600 mt-2 font-medium";
+        }
+      } catch (err) {
+        resMsg.innerText = "❌ เชื่อมต่อ Server ไม่ได้";
+        resMsg.className = "text-xs text-center text-red-600 mt-2 font-medium";
+      }
+    }
+
+    // 3. บันทึกตารางเวลา
+    async function saveSchedule() {
+      const deviceId = getCurrentDevice();
+      const timesStr = document.getElementById('scheduleInput').value;
+      const timesArray = timesStr.split(',').map(t => t.trim()).filter(t => t);
+      const resMsg = document.getElementById('scheduleResult');
+
+      if (timesArray.length === 0) {
+        alert('กรุณากรอกเวลาอย่างน้อย 1 ค่า');
+        return;
+      }
+
+      resMsg.innerText = "⏳ กำลังบันทึก...";
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/set-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: deviceId, times: timesArray })
+        });
+        const json = await res.json();
+        if (json.success) {
+          resMsg.innerText = "✅ บันทึกตารางเวลาสำเร็จ!";
+          resMsg.className = "text-xs text-center text-green-600 mt-1";
+        } else {
+          resMsg.innerText = "❌ บันทึกไม่สำเร็จ";
+          resMsg.className = "text-xs text-center text-red-600 mt-1";
+        }
+      } catch (err) {
+        resMsg.innerText = "❌ เชื่อมต่อ Server ไม่ได้";
+        resMsg.className = "text-xs text-center text-red-600 mt-1";
+      }
+    }
+
+    // 4. โหลดตารางเวลาเดิม
+    async function fetchSchedule() {
+      const deviceId = getCurrentDevice();
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/get-schedule?device_id=${deviceId}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          document.getElementById('scheduleInput').value = json.data.times || json.data.scheduledTimes || "";
+        }
+      } catch (err) {
+        console.error("Error fetching schedule");
+      }
+    }
+
+    let feederChart = null; // ตัวแปรเก็บกราฟ
+
+    // ฟังก์ชันสำหรับสร้างหรืออัปเดตกราฟ
+    function renderChart(historyData) {
+      const ctx = document.getElementById('feederChart').getContext('2d');
+
+      // เรียงข้อมูลจากเก่าไปใหม่ เพื่อให้กราฟวิ่งจากซ้ายไปขวา
+      const sortedData = [...historyData].reverse();
+
+      // ดึงค่าแยกตามแกน X (เวลา) และแกน Y (น้ำหนักถัง / น้ำหนักชาม)
+      const labels = sortedData.map(row => new Date(row.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const hopperWeights = sortedData.map(row => row.hopperWeight || 0);
+      const bowlWeights = sortedData.map(row => row.bowlWeight || 0);
+
+      // ถ้าเคยสร้างกราฟไว้แล้ว ให้ทำลายอันเก่าทิ้งก่อนวาดใหม่ (ป้องกันบัฟทับซ้อน)
+      if (feederChart) {
+        feederChart.destroy();
+      }
+
+      // สร้างกราฟใหม่ด้วย Chart.js
+      feederChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'น้ำหนักอาหารในถัง (g)',
+              data: hopperWeights,
+              borderColor: 'rgb(79, 70, 229)', // สี Indigo
+              backgroundColor: 'rgba(79, 70, 229, 0.1)',
+              borderWidth: 2,
+              tension: 0.3, // ความโค้งของเส้นกราฟ
+              fill: true
+            },
+            {
+              label: 'น้ำหนักอาหารในชาม (g)',
+              data: bowlWeights,
+              borderColor: 'rgb(16, 185, 129)', // สี Emerald
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              borderWidth: 2,
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // 5. โหลดประวัติ (History)
+    let globalHistoryData = []; // สร้างตัวแปร Global ไว้เก็บข้อมูลทั้งหมดที่ดึงมา
+
+    async function fetchHistory() {
+      const deviceId = getCurrentDevice();
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">กำลังโหลดประวัติ...</td></tr>`;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/history?deviceId=${deviceId}`);
+        const json = await res.json();
+
+        if (json.success && json.data && json.data.length > 0) {
+          // เก็บข้อมูลลงตัวแปร Global
+          globalHistoryData = json.data;
+
+          // เรียกใช้ตัวกรองทันที (ค่าเริ่มต้นคือ 'ทั้งหมด')
+          applyTimeFilter();
+        } else {
+          globalHistoryData = [];
+          tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">ไม่พบประวัติข้อมูล</td></tr>`;
+          if (feederChart) feederChart.destroy();
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400">โหลดข้อมูลล้มเหลว</td></tr>`;
+      }
+    }
+
+    // สร้างฟังก์ชันใหม่สำหรับกรองช่วงเวลา (Filter)
+    function applyTimeFilter() {
+      const filterValue = document.getElementById('timeFilter').value;
+      const now = new Date(); // เวลาปัจจุบัน
+
+      let filteredData = globalHistoryData;
+
+      // กรองข้อมูลตามช่วงเวลา
+      if (filterValue !== 'all') {
+        filteredData = globalHistoryData.filter(row => {
+          const rowDate = new Date(row.timestamp);
+          const diffTime = Math.abs(now - rowDate);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // แปลงหน่วยเป็นวัน
+
+          if (filterValue === 'day') return diffDays <= 1;   // 24 ชม.
+          if (filterValue === 'week') return diffDays <= 7;  // 7 วัน
+          if (filterValue === 'month') return diffDays <= 30; // 30 วัน
+          if (filterValue === 'year') return diffDays <= 365; // 365 วัน
+          return true;
+        });
+      }
+
+      // 1. ส่งข้อมูลที่กรองแล้วไปวาดกราฟใหม่
+      renderChart(filteredData);
+
+      // 2. ส่งข้อมูลที่กรองแล้วไปอัปเดตตารางใหม่ด้วย (ถ้ามีข้อมูล)
+      const tbody = document.getElementById('historyTableBody');
+      if (filteredData.length > 0) {
+        tbody.innerHTML = filteredData.map(row => `
+            <tr class="hover:bg-gray-50">
+                <td class="p-3 text-gray-500">${new Date(row.timestamp).toLocaleString('th-TH') || '-'}</td>
+                <td class="p-3 font-medium">${row.deviceId || '-'}</td>
+                <td class="p-3">${row.hopperWeight || 0} g</td>
+                <td class="p-3">${row.bowlWeight || 0} g</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">${row.status || 'OK'}</span></td>
+            </tr>
+        `).join('');
+      } else {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">ไม่พบข้อมูลในช่วงเวลานี้</td></tr>`;
+      }
+    }
+    
+    // ฟังก์ชันดึงรายชื่อ Device ทั้งหมดมาใส่ใน Dropdown อัตโนมัติ
+    async function fetchDevices() {
+      const select = document.getElementById('deviceSelect');
+      try {
+        const res = await fetch(`${API_BASE}/api/feeder/devices`);
+        const json = await res.json();
+
+        if (json.success && json.data && json.data.length > 0) {
+          select.innerHTML = json.data.map(devId => `<option value="${devId}">${devId}</option>`).join('');
+        } else {
+          select.innerHTML = `<option value="cat_feeder_01">cat_feeder_01 (ค่าเริ่มต้น)</option>`;
+        }
+
+        changeDevice();
+      } catch (err) {
+        console.error('Failed to load devices:', err);
+        select.innerHTML = `<option value="cat_feeder_01">cat_feeder_01 (โหลดพลาด)</option>`;
+        changeDevice();
+      }
+    }
+
+    // ฟังก์ชันเปลี่ยนเครื่อง
+    function changeDevice() {
+      fetchLatestStatus();
+      fetchSchedule();
+      fetchHistory();
+    }
+
+    // โหลดข้อมูลทั้งหมดเมื่อเปิดหน้าเว็บ
+    window.onload = () => {
+      fetchDevices();
+    };
+  </script>
+</body>
+
+</html>

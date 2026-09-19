@@ -55,7 +55,7 @@ const updateDeviceSchedule = (deviceId, timesArray) => {
  * 2. ดึงตารางเวลา (รวมข้อมูลกลับมาเป็น Array ให้ใช้งานง่ายเหมือนเดิม)
  */
 const getSchedulesFromSheet = (targetDeviceId = null) => {
-    console.log(`⏳ โหลด Schedules (Normalized) จาก SQLite... (Device ID: ${targetDeviceId || 'All'})`);
+    console.log(`⏳ Loading : schedule SQLite... (Device ID: ${targetDeviceId || 'All'})`);
     
     if (targetDeviceId) {
         const stmt = db.prepare('SELECT feeding_time, last_updated FROM schedules WHERE device_id = ? ORDER BY feeding_time ASC');
