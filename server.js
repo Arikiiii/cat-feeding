@@ -109,7 +109,7 @@ app.get('/api/feeder/get-schedule', (req, res) => {
 
 // ====== API Endpoint to Send Feed Command to ESP32 via MQTT ======
 const TOPIC_COMMAND = 'catfeeder/control/command';
-
+const TOPIC_time =    'catfeeder/control/set-time';
 //=========================================
 // POST API Endpoints
 
@@ -145,6 +145,21 @@ app.post('/api/feeder/set-schedule', (req, res) => {
 
     // เรียกฟังก์ชันอัปเดตตารางเวลา (SQLite)
     const result = updateDeviceSchedule(device_id, times);
+    console.log(`SQLite  📅 Updated schedule for device [${device_id}] in SQLite:`, times);
+    const set_timePayload = JSON.stringify({
+        action: 'set_schedule',
+        device_id: device_id,
+        times: times,
+        timestamp: Date.now()
+    });
+
+    client.publish(TOPIC_time, set_timePayload, (err) => {
+        if (err) {
+            console.error('❌ Failed to publish set-time command:', err);
+            return res.status(500).json({ success: false, message: 'Failed to send set-time command' });
+        }
+        console.log(`MQTT 🚀 Sent set-time command to  [${TOPIC_time}]:`, set_timePayload);
+    });
 
     if (result && result.success) {
         res.status(200).json({ success: true, message: 'Schedule updated successfully in SQLite' });
