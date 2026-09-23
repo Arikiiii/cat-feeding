@@ -1,31 +1,233 @@
-# 📥 คู่มือการติดตั้งและตั้งค่า Eclipse Mosquitto (MQTT Broker) บน Windows
+# 🐱 Cat Feeder — MQTT Broker & Server Setup Guide
 
-คู่มือนี้อธิบายวิธีการติดตั้งและตั้งค่า **Eclipse Mosquitto** เพื่อใช้งานเป็น Private MQTT Broker บนระบบปฏิบัติการ Windows สำหรับโปรเจกต์ IoT (เช่น ESP32 ร่วมกับ Node.js)
-
----
-
-## 1. ขั้นตอนการติดตั้ง (Installation)
-
-1. ดาวน์โหลดโปรแกรมติดตั้ง Mosquitto สำหรับ Windows ได้ที่เว็บไซต์ทางการ:
-   * [https://mosquitto.org/download/](https://mosquitto.org/download/)
-   * เลือกเวอร์ชันที่เหมาะสม (แนะนำ Windows 64-bit installer)
-2. ดับเบิ้ลคลิกไฟล์ที่ดาวน์โหลดมา และกด **Next** ไปเรื่อยๆ จนสิ้นสุดการติดตั้ง (แนะนำให้เลือกติดตั้งเป็น Windows Service เพื่อให้รันอัตโนมัติ)
+คู่มือฉบับสมบูรณ์สำหรับการติดตั้งและตั้งค่าระบบ **เครื่องให้อาหารแมวอัตโนมัติ (Cat Feeder)** ซึ่งประกอบด้วย 3 ส่วนหลัก ได้แก่ **MQTT Broker (Eclipse Mosquitto)**, **เว็บเซิร์ฟเวอร์ (Node.js)** และ **เฟิร์มแวร์ ESP32** โดยเอกสารนี้ครอบคลุมตั้งแต่การติดตั้งบน Windows ไปจนถึงโครงสร้าง Topic ที่ใช้สื่อสารระหว่างอุปกรณ์
 
 ---
 
-## 2. การตั้งค่า Configuration
+## 📑 สารบัญ
 
-หลังจากติดตั้งเสร็จเรียบร้อย ให้ทำการแก้ไขไฟล์คอนฟิกเพื่อเปิดรับการเชื่อมต่อ:
+- [ภาพรวมระบบ](#-ภาพรวมระบบ)
+- [สิ่งที่ต้องเตรียมก่อนเริ่ม](#-สิ่งที่ต้องเตรียมก่อนเริ่ม)
+- [1. ติดตั้ง Eclipse Mosquitto (MQTT Broker)](#1-ติดตั้ง-eclipse-mosquitto-mqtt-broker)
+- [2. ตั้งค่า Mosquitto Configuration](#2-ตั้งค่า-mosquitto-configuration)
+- [3. รัน Web Server (Node.js)](#3-รัน-web-server-nodejs)
+- [4. ตั้งค่าและอัปโหลดเฟิร์มแวร์ ESP32](#4-ตั้งค่าและอัปโหลดเฟิร์มแวร์-esp32)
+- [5. โครงสร้าง MQTT Topic](#5-โครงสร้าง-mqtt-topic)
+- [การแก้ปัญหาเบื้องต้น](#-การแก้ปัญหาเบื้องต้น)
+- [หมายเหตุด้านความปลอดภัย](#-หมายเหตุด้านความปลอดภัย)
 
-1. เปิด Command Prompt (CMD) หรือ PowerShell แล้วเข้าไปยังโฟลเดอร์ที่ติดตั้งโปรแกรม:
-   ```bash
-   cd "C:\Program Files\mosquitto"
+---
 
-เปิดไฟล์ mosquitto.conf
-เพิ้่ม
+## 🗺️ ภาพรวมระบบ
+
+```
+┌─────────────┐        MQTT (1883)        ┌──────────────────┐
+│   ESP32     │ ─────────────────────────▶ │  Mosquitto Broker │
+│ (Firmware)  │ ◀───────────────────────── │   (localhost)     │
+└─────────────┘                            └─────────┬──────────┘
+                                                       │
+                                                       │ MQTT
+                                                       ▼
+                                            ┌──────────────────┐
+                                            │  Node.js Server   │
+                                            │  (Web Dashboard)   │
+                                            │  http://localhost:3000
+                                            └──────────────────┘
+```
+
+- **ESP32** อ่านค่าน้ำหนักจากโหลดเซลล์ (ถังอาหาร/ถาดอาหาร), ควบคุมเซอร์โวจ่ายอาหาร, เก็บตารางเวลาไว้ใน Flash และสื่อสารผ่าน MQTT
+- **Mosquitto Broker** ทำหน้าที่เป็นตัวกลางรับ-ส่งข้อความระหว่าง ESP32 กับเว็บเซิร์ฟเวอร์
+- **Node.js Server** ให้ผู้ใช้สั่งจ่ายอาหาร ตั้งตารางเวลา และดูสถานะเครื่องผ่านหน้าเว็บ
+
+---
+
+## ✅ สิ่งที่ต้องเตรียมก่อนเริ่ม
+
+| รายการ | เวอร์ชันแนะนำ | หมายเหตุ |
+|---|---|---|
+| Windows | 10 / 11 (64-bit) | รองรับการติดตั้งเป็น Windows Service |
+| [Node.js](https://nodejs.org/) | LTS ล่าสุด | สำหรับรันเว็บเซิร์ฟเวอร์ |
+| [PlatformIO](https://platformio.org/) | ล่าสุด (ผ่าน VS Code Extension) | สำหรับ build/upload เฟิร์มแวร์ ESP32 |
+| ESP32 Dev Board | — | พร้อมสาย USB สำหรับอัปโหลดโค้ด |
+| เครื่องคอมพิวเตอร์และ ESP32 | อยู่ใน **Wi-Fi วงเดียวกัน** | จำเป็น เพราะ Broker รันแบบ local |
+
+---
+
+## 1. ติดตั้ง Eclipse Mosquitto (MQTT Broker)
+
+1. ดาวน์โหลดตัวติดตั้ง Mosquitto สำหรับ Windows จากเว็บไซต์ทางการ:
+   👉 **[https://mosquitto.org/download/](https://mosquitto.org/download/)**
+   - เลือกเวอร์ชัน **Windows 64-bit installer** (เช่น `mosquitto-2.x.x-install-windows-x64.exe`)
+2. รันไฟล์ที่ดาวน์โหลดมา แล้วกด **Next** ไปเรื่อยๆ จนติดตั้งเสร็จ
+   - ✅ แนะนำให้ติ๊กเลือกติดตั้งเป็น **Windows Service** ระหว่างการติดตั้ง เพื่อให้ Mosquitto รันอัตโนมัติทุกครั้งที่เปิดเครื่อง โดยไม่ต้องเปิด Terminal ทิ้งไว้เอง
+3. ตรวจสอบว่าติดตั้งสำเร็จ โดยเปิด **Services** (`services.msc`) แล้วมองหา `Mosquitto Broker` — สถานะควรเป็น **Running**
+
+---
+
+## 2. ตั้งค่า Mosquitto Configuration
+
+หลังติดตั้งเสร็จ ต้องแก้ไฟล์คอนฟิกเพื่อเปิดรับการเชื่อมต่อจากอุปกรณ์อื่น (เช่น ESP32) เนื่องจากค่าเริ่มต้นของ Mosquitto จะอนุญาตให้เชื่อมต่อได้เฉพาะจากเครื่องตัวเองเท่านั้น
+
+### 2.1 เข้าไปยังโฟลเดอร์ติดตั้ง
+
+เปิด **Command Prompt** หรือ **PowerShell** ในโหมด **Administrator** แล้วรัน:
+
+```bash
+cd "C:\Program Files\mosquitto"
+```
+
+### 2.2 แก้ไขไฟล์ `mosquitto.conf`
+
+เปิดไฟล์ `mosquitto.conf` ด้วยโปรแกรมแก้ไขข้อความ (เช่น Notepad ที่รันแบบ Administrator) แล้วเพิ่ม 2 บรรทัดนี้ต่อท้ายไฟล์:
+
+```conf
 listener 1883
 allow_anonymous true
+```
 
-mqtt://localhost:1883
+| บรรทัด | ความหมาย |
+|---|---|
+| `listener 1883` | เปิดให้ broker รับการเชื่อมต่อผ่านพอร์ต **1883** (พอร์ตมาตรฐานของ MQTT) จากทุก network interface บนเครื่อง ไม่ใช่แค่ `localhost` |
+| `allow_anonymous true` | อนุญาตให้เชื่อมต่อได้โดยไม่ต้องใช้ username/password — สะดวกสำหรับการพัฒนา/ทดสอบในเครือข่ายบ้าน แต่**ไม่ควรใช้ในระบบจริง** (ดู [หมายเหตุด้านความปลอดภัย](#-หมายเหตุด้านความปลอดภัย)) |
 
-*** อย่าด่าผม Gemini บอกผมมาทั้งนั้น
+### 2.3 รีสตาร์ท Mosquitto Service
+
+หลังแก้ไฟล์แล้วต้องรีสตาร์ทเพื่อให้ค่าที่ตั้งใหม่มีผล:
+
+```bash
+net stop mosquitto
+net start mosquitto
+```
+
+### 2.4 หา IP Address ของเครื่องที่รัน Broker
+
+ESP32 จะเชื่อมต่อ Broker ผ่าน IP ของเครื่องนี้ (ไม่ใช่ `localhost`) หา IP ได้ด้วยคำสั่ง:
+
+```bash
+ipconfig
+```
+
+มองหาค่า **IPv4 Address** (เช่น `192.168.1.xxx`) แล้วนำไปตั้งในเฟิร์มแวร์ ESP32 ที่ `config.h`:
+
+```cpp
+#define MQTT_BROKER "192.168.1.xxx"   // แก้เป็น IP ของเครื่องที่รัน Mosquitto
+#define MQTT_PORT   1883
+```
+
+> 💡 **Connection string สำหรับทดสอบด้วยเครื่องมืออื่น** (เช่น MQTT Explorer, MQTTX):
+> ```
+> mqtt://<IP-เครื่องที่รัน-Broker>:1883
+> ```
+
+---
+
+## 3. รัน Web Server (Node.js)
+
+1. เปิด Terminal แล้วเข้าไปที่โฟลเดอร์ `cat-feeder` ของโปรเจกต์
+2. ติดตั้ง dependencies:
+   ```bash
+   npm install
+   ```
+3. สั่งรันเซิร์ฟเวอร์:
+   ```bash
+   npm start
+   ```
+4. เปิดเบราว์เซอร์แล้วเข้าที่:
+   ```
+   http://localhost:3000
+   ```
+
+> ⚠️ ตรวจสอบว่าไฟล์ config ฝั่ง Node.js (เช่น `.env` หรือไฟล์ตั้งค่า MQTT) ชี้ไปยัง Broker ตัวเดียวกับที่ ESP32 เชื่อมต่ออยู่ (`localhost:1883` หรือ IP เดียวกับที่ตั้งไว้ในขั้นตอนที่ 2.4)
+
+---
+
+## 4. ตั้งค่าและอัปโหลดเฟิร์มแวร์ ESP32
+
+1. เปิด **VS Code** ที่ติดตั้ง PlatformIO Extension แล้วเลือก **Import Project** โดยชี้ไปที่โฟลเดอร์:
+   ```
+   cat-feeder\ESP32Code\catfeeder_pio
+   ```
+2. เปิดไฟล์ `config.h` และตรวจสอบ/แก้ค่าต่อไปนี้ให้ตรงกับหน้างานจริงก่อน build:
+
+   | Macro | คำอธิบาย |
+   |---|---|
+   | `WIFI_SSID`, `WIFI_PASSWORD` | ชื่อและรหัสผ่าน Wi-Fi ที่ ESP32 จะเชื่อมต่อ |
+   | `MQTT_BROKER` | IP ของเครื่องที่รัน Mosquitto (จากขั้นตอนที่ 2.4) |
+   | `MQTT_PORT` | พอร์ต MQTT (ค่าเริ่มต้น `1883`) |
+   | `DEVICE_ID` | รหัสประจำเครื่อง ต้อง**ตรงกับฝั่ง backend** ที่ใช้แยกแยะอุปกรณ์ |
+   | `PIN_*` | พินต่างๆ (โหลดเซลล์, เซอร์โว, RTC, ปุ่มกด) — ตรวจสอบให้ตรงกับการต่อสายจริง และ**ไม่ชนกันเอง** |
+   | `CAL_FACTOR_HOPPER`, `CAL_FACTOR_BOWL` | ค่า calibration ของโหลดเซลล์ ต้องปรับเทียบเองด้วยน้ำหนักมาตรฐาน |
+
+3. เชื่อมต่อ ESP32 กับคอมพิวเตอร์ผ่านสาย USB
+4. กด **Build** (✓) เพื่อคอมไพล์ แล้วกด **Upload** (→) เพื่ออัปโหลดขึ้นบอร์ด
+5. เปิด **Serial Monitor** (baud rate `115200`) เพื่อดู log การเชื่อมต่อ Wi-Fi/MQTT และตรวจสอบว่าเครื่องทำงานปกติ
+
+---
+
+## 5. โครงสร้าง MQTT Topic
+
+ระบบใช้ 3 Topic หลักในการสื่อสารระหว่าง ESP32 ↔ Broker ↔ Web Server:
+
+| Topic | ทิศทาง | ใช้ทำอะไร |
+|---|---|---|
+| `catfeeder/control/command` | Web → ESP32 | สั่งการทั่วไป เช่น สั่งจ่ายอาหารทันที (`feed_now`) |
+| `catfeeder/control/set-time` | Web → ESP32 | ส่งตารางเวลาให้อาหารอัตโนมัติไปตั้งค่าที่ ESP32 |
+| `catfeeder/control/data` | ESP32 → Web/DB | ESP32 ส่งสถานะปัจจุบัน (น้ำหนักถัง/ถาด, สถานะเครื่อง) กลับมา |
+
+### ตัวอย่าง Payload
+
+**สั่งจ่ายอาหารทันที** (ไปที่ `catfeeder/control/command`):
+```json
+{
+  "action": "feed_now",
+  "device_id": "catfeeder_001",
+  "portion": 1
+}
+```
+
+**ตั้งตารางเวลาให้อาหาร** (ไปที่ `catfeeder/control/set-time`):
+```json
+{
+  "action": "set_schedule",
+  "device_id": "catfeeder_001",
+  "times": ["07:00", "18:30"],
+  "timestamp": 1790141313076
+}
+```
+
+**สถานะที่ ESP32 ส่งกลับมา** (จาก `catfeeder/control/data`):
+```json
+{
+  "device_id": "catfeeder_001",
+  "hopper_weight_g": 850,
+  "bowl_weight_g": 42,
+  "feeder_status": "idle"
+}
+```
+> `feeder_status` มีได้ 3 ค่า: `idle` (ว่าง), `feeding` (กำลังจ่ายอาหาร), `error` (เซนเซอร์มีปัญหา)
+
+---
+
+## 🛠️ การแก้ปัญหาเบื้องต้น
+
+| อาการ | สาเหตุที่เป็นไปได้ | วิธีแก้ |
+|---|---|---|
+| ESP32 เชื่อมต่อ MQTT ไม่ได้ | IP `MQTT_BROKER` ผิด หรือ Firewall บล็อกพอร์ต 1883 | เช็ค IP ด้วย `ipconfig` อีกครั้ง, เปิด Windows Firewall อนุญาตพอร์ต 1883 |
+| Mosquitto Service ไม่ start | Config ผิด syntax | ดู error log ที่ `C:\Program Files\mosquitto\mosquitto.log` |
+| Web Server เชื่อมต่อ Broker ไม่ได้ | Broker ยังไม่รัน หรือ config MQTT ฝั่ง Node.js ชี้ผิด host | ตรวจว่า service `mosquitto` สถานะ Running แล้วเช็ค connection string ฝั่งเว็บ |
+| ESP32 กับคอมพิวเตอร์เชื่อมต่อ Broker คนละวง | ไม่ได้อยู่ Wi-Fi เดียวกัน | ตรวจสอบว่าทั้งสองอุปกรณ์เชื่อมต่อ SSID เดียวกัน |
+
+---
+
+## 🔒 หมายเหตุด้านความปลอดภัย
+
+การตั้งค่า `allow_anonymous true` ในคู่มือนี้เหมาะสำหรับ**การพัฒนา/ทดสอบในเครือข่ายบ้านที่เชื่อถือได้เท่านั้น** หากต้องการนำไปใช้งานจริงหรือเปิดให้เข้าถึงผ่านอินเทอร์เน็ต ควรพิจารณา:
+
+- ตั้งค่า username/password ด้วยไฟล์ `password_file` แทนการอนุญาต anonymous
+- เปิดใช้งาน TLS/SSL (พอร์ต `8883`) แทนการส่งข้อมูลแบบไม่เข้ารหัสผ่านพอร์ต `1883`
+- จำกัด IP ที่อนุญาตให้เชื่อมต่อผ่าน Firewall แทนการเปิดรับทุก interface
+
+
+contect us
+จัดทำโดย ธีรพล เถาว์ชู
+discord: ariki3797
