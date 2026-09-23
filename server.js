@@ -18,7 +18,7 @@ const port = 3000;
 // ====== MQTT Configuration ======
 // const mqtt_broker_url = 'mqtt://broker.hivemq.com:1883';
 const mqtt_broker_url = 'mqtt://localhost:1883';
-const mqttTopic = 'catfeeder/control/status';
+const mqttTopic = 'catfeeder/control/data';
 
 // ====== MQTT Client Setup =====
 const client = mqttConnect(mqtt_broker_url, mqttTopic, (cleanData) => {
@@ -122,6 +122,7 @@ app.post('/api/feeder/feed-now', (req, res) => {
 
     const commandPayload = JSON.stringify({
         action: 'feed_now',
+        device_id: device_id,
         portion: portion || 1,
         timestamp: Date.now()
     });
