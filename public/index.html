@@ -74,45 +74,53 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-    <!-- Control Feed Now -->
-    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-      <h2 class="text-lg font-semibold mb-4 text-emerald-600 flex items-center gap-2">⚡ สั่งให้อาหารทันที <span
-          id="feedNowDeviceLabel" class="text-xs font-normal text-gray-400"></span></h2>
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-600 mb-1">จำนวนส่วน (Portion)</label>
-          <input type="number" id="portionInput" value="1" min="1" max="5"
-            class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      <!-- Control Feed Now -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-semibold mb-4 text-emerald-600 flex items-center gap-2">⚡ สั่งให้อาหารทันที <span
+            id="feedNowDeviceLabel" class="text-xs font-normal text-gray-400"></span></h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">จำนวนส่วน (Portion)</label>
+            <input type="number" id="portionInput" value="1" min="1" max="5"
+              class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          </div>
+          <button onclick="feedNow()"
+            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium shadow-md transition">
+            🐾 ให้อาหารเดี๋ยวนี้!
+          </button>
+          <p id="feedResult" class="text-xs text-center text-gray-500 mt-2"></p>
         </div>
-        <button onclick="feedNow()"
-          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium shadow-md transition">
-          🐾 ให้อาหารเดี๋ยวนี้!
-        </button>
-        <p id="feedResult" class="text-xs text-center text-gray-500 mt-2"></p>
       </div>
-    </div>
 
-    <!-- Schedule Management -->
-    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-      <h2 class="text-lg font-semibold mb-4 text-amber-600 flex items-center gap-2">⏰ ตั้งเวลาให้อาหาร <span
-          id="scheduleDeviceLabel" class="text-xs font-normal text-gray-400"></span></h2>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-gray-600 mb-1">เวลา (คั่นด้วยจุลภาค เช่น 08:00,18:00)</label>
-          <input type="text" id="scheduleInput" placeholder="08:00, 18:00"
-            class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      <!-- Schedule Management -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-semibold mb-4 text-amber-600 flex items-center gap-2">⏰ ตั้งเวลาและปริมาณอาหารแยกตามมื้อ
+          <span id="scheduleDeviceLabel" class="text-xs font-normal text-gray-400"></span></h2>
+
+        <!-- พื้นที่สำหรับรายการตารางเวลาแต่ละมื้อ -->
+        <div id="scheduleListContainer" class="space-y-3 mb-4">
+          <!-- แถวตัวอย่าง (สามารถเขียน Javascript สร้างพลัสเพิ่มแถวได้) -->
+          <div class="flex gap-2 items-center schedule-row">
+            <input type="time" value="08:00"
+              class="time-input px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none flex-1">
+            <input type="number" value="1" min="1" max="5" placeholder="Portion"
+              class="portion-input w-24 px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
+            <button type="button" onclick="this.parentElement.remove()"
+              class="text-red-500 hover:text-red-700 px-2">🗑️</button>
+          </div>
         </div>
-        <button onclick="saveSchedule()"
+
+        <button onclick="addScheduleRow()"
+          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium transition mb-2">
+          ➕ เพิ่มมื้ออาหาร
+        </button>
+
+        <button onclick="saveCustomSchedule()"
           class="w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-xl font-medium shadow-md transition">
-          💾 บันทึกตารางเวลา
+          💾 บันทึกตารางเวลาแบบแยกพอร์ชั่น
         </button>
-        <button onclick="fetchSchedule()"
-          class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium transition">
-          📥 โหลดเวลาเดิม
-        </button>
-        <p id="scheduleResult" class="text-xs text-center text-gray-500"></p>
+        <p id="scheduleResult" class="text-xs text-center text-gray-500 mt-2"></p>
       </div>
-    </div>
 
     </div>
   </main>
@@ -154,7 +162,8 @@
 
       <div class="relative w-full h-72">
         <canvas id="feederChart"></canvas>
-        <p id="chartEmptyMessage" class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+        <p id="chartEmptyMessage"
+          class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
           ไม่มีข้อมูลให้แสดงในช่วงเวลานี้
         </p>
       </div>
@@ -173,9 +182,7 @@
             <option value="current">เฉพาะเครื่องหลัก</option>
             <option value="all">ทุกเครื่อง</option>
           </select>
-          <button onclick="fetchHistory()"
-            class="text-sm bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">โหลดประวัติใหม่</button>
-        </div>
+           </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
@@ -195,6 +202,8 @@
           </tbody>
         </table>
       </div>
+      <!-- chage page table-->
+      <div id="paginationControls"></div>
     </div>
   </section>
 

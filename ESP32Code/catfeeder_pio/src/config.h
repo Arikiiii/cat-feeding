@@ -27,11 +27,11 @@
 #define PIN_BOWL_SCK    5
 
 // ค่า calibration factor ต้องปรับเทียบเองด้วยน้ำหนักมาตรฐานจริง
-#define CAL_FACTOR_HOPPER  -7050.0f
-#define CAL_FACTOR_BOWL    -7050.0f
+#define CAL_FACTOR_HOPPER  -702.51f
+#define CAL_FACTOR_BOWL    -673.23f
 
 // น้ำหนักเปลี่ยนแปลงขั้นต่ำ (กรัม) ถึงจะถือว่า "เปลี่ยนจริง" แล้วค่อยส่งขึ้น MQTT
-#define WEIGHT_CHANGE_THRESHOLD_G  2.0f
+#define WEIGHT_CHANGE_THRESHOLD_G  10.0f
 
 // ================== เซอร์โว ==================
 #define PIN_SERVO             15

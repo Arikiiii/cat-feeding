@@ -35,6 +35,104 @@ function setCapacity(deviceId, value) {
   localStorage.setItem(`feeder_capacity_${deviceId}`, value);
 }
 
+// ฟังก์ชันกดปุ่มเพิ่มแถวเวลา
+function addScheduleRow() {
+  const container = document.getElementById('scheduleListContainer');
+  const row = document.createElement('div');
+  row.className = "flex gap-2 items-center schedule-row";
+  row.innerHTML = `
+        <input type="time" value="12:00" class="time-input px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none flex-1">
+        <input type="number" value="1" min="1" max="5" placeholder="Portion" class="portion-input w-24 px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
+        <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 px-2">🗑️</button>
+    `;
+  container.appendChild(row);
+}
+
+// ฟังก์ชันบันทึกข้อมูลส่งเข้า API
+async function saveCustomSchedule() {
+  // 1. ดึง device_id จาก id="scheduleDeviceLabel" (หรือดึงจากตัวแปรโกลบอลของหน้าเว็บคุณ)
+  const deviceIdLabel = document.getElementById('scheduleDeviceLabel');
+  // ดึงค่าข้อความหรือ dataset (เช่น ถ้าข้อความใน span คือ "(catfeeder_001)" ให้ตัดวงเล็บออก หรือดึงจากตัวแปรหลัก)
+  let deviceId = "catfeeder_001"; // ค่าสำรองเผื่อยังไม่ได้เซ็ต
+  if (deviceIdLabel) {
+    const text = deviceIdLabel.innerText.trim();
+    // ถ้าข้อความในวงเล็บ เช่น "(catfeeder_001)" ให้ดึงเฉพาะข้างใน
+    const match = text.match(/\(([^)]+)\)/);
+    if (match) {
+      deviceId = match[1];
+    } else if (deviceIdLabel.dataset.deviceId) {
+      deviceId = deviceIdLabel.dataset.deviceId;
+    }
+  }
+
+  // 2. วนลูปเก็บค่าจากแต่ละแถวที่มี class="schedule-row"
+  const rows = document.querySelectorAll('.schedule-row');
+  const times = [];
+
+  rows.forEach(row => {
+    // ปรับ selector ตรงนี้ให้ตรงกับ class หรือ element จริงของคอมโพเนนต์เวลาในรูป
+    const timeInput = row.querySelector('.time-input');
+    const portionInput = row.querySelector('.portion-input');
+
+    if (timeInput && timeInput.value) {
+      // สมมติว่าถ้าคอมโพเนนต์ในรูปพ่นค่าออกมาเป็น "09:00 AM" หรือรูปแบบ 12 ชม.
+      let rawTime = timeInput.value.trim();
+      let formattedTime = rawTime;
+
+      // ถ้าค่าที่ได้ติด AM/PM มาด้วย (เช่น "09:00 AM" หรือ "02:30 PM") 
+      // เราต้องแปลงเป็นระบบ 24 ชั่วโมง ("HH:MM") ก่อนส่งเข้า API
+      if (rawTime.includes('AM') || rawTime.includes('PM')) {
+        const [timePart, modifier] = rawTime.split(' ');
+        let [hours, minutes] = timePart.split(':');
+        let h = parseInt(hours, 10);
+
+        if (modifier === 'PM' && h < 12) {
+          h += 12;
+        } else if (modifier === 'AM' && h === 12) {
+          h = 0;
+        }
+        formattedTime = `${String(h).padStart(2, '0')}:${minutes}`;
+      }
+
+      times.push({
+        time: formattedTime, // ได้ค่า 24 ชม. เช่น "09:00" หรือ "14:30" แน่นอน
+        portion: portionInput ? (parseInt(portionInput.value) || 1) : 1
+      });
+    }
+  });
+
+  // 3. ตรวจสอบความถูกต้องก่อนส่ง
+  if (!deviceId || times.length === 0) {
+    document.getElementById('scheduleResult').innerText = "❌ บันทึกไม่สำเร็จ: Missing device_id or times";
+    document.getElementById('scheduleResult').className = "text-xs text-center text-red-500 mt-2";
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/feeder/set-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        times: times
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      document.getElementById('scheduleResult').innerText = "✅ บันทึกตารางเวลาสำเร็จ!";
+      document.getElementById('scheduleResult').className = "text-xs text-center text-green-500 mt-2";
+    } else {
+      document.getElementById('scheduleResult').innerText = "❌ บันทึกไม่สำเร็จ: " + (result.message || 'Unknown error');
+      document.getElementById('scheduleResult').className = "text-xs text-center text-red-500 mt-2";
+    }
+  } catch (err) {
+    console.error(err);
+    document.getElementById('scheduleResult').innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ";
+    document.getElementById('scheduleResult').className = "text-xs text-center text-red-500 mt-2";
+  }
+}
+
 function editCapacity(deviceId) {
   const current = getCapacity(deviceId);
   const input = prompt(`ความจุเต็มถังของ ${deviceId} (กรัม) — ใช้คำนวณ %`, current);
@@ -280,131 +378,80 @@ async function feedNow() {
 
 // ---------- Schedule ----------
 
-// สร้าง element 1 แถวของตารางเวลา (เวลา + พอร์ชั่น + ปุ่มลบ)
-// ใช้ร่วมกันทั้งตอนกดปุ่ม "เพิ่มมื้ออาหาร" และตอนวาดตารางเวลาเดิมที่ดึงมาจาก API
-function createScheduleRowElement(time = '12:00', portion = 1) {
-  const row = document.createElement('div');
-  row.className = 'flex gap-2 items-center schedule-row';
-  row.innerHTML = `
-    <input type="time" value="${time}" class="time-input px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none flex-1">
-    <input type="number" value="${portion}" min="1" max="5" placeholder="Portion" class="portion-input w-24 px-3 py-2 border rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none">
-    <button type="button" onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-700 px-2">🗑️</button>
-  `;
-  return row;
-}
+async function saveSchedule() {
+  // 1. ดึง device_id ให้ชัวร์ (ถ้าหน้าเว็บใช้ตัวแปรโกลบอลเก็บชื่อเครื่องอยู่แล้ว ให้เอามาใส่ตรงนี้ได้เลย)
+  // สมมติว่าดึงจาก UI หรือกำหนดค่าตรงๆ (เช่น "catfeeder_001")
+  const deviceIdElement = document.getElementById('scheduleDeviceLabel');
+  const deviceId = (deviceIdElement && deviceIdElement.dataset.deviceId) ? deviceIdElement.dataset.deviceId : "catfeeder_001";
 
-// ฟังก์ชันกดปุ่มเพิ่มแถวเวลา (เรียกจาก onclick ใน HTML โดยไม่ส่งพารามิเตอร์ -> ได้แถวเปล่าเริ่มต้น)
-function addScheduleRow(time = '12:00', portion = 1) {
-  const container = document.getElementById('scheduleListContainer');
-  container.appendChild(createScheduleRowElement(time, portion));
-}
+  // 2. วนลูปเก็บค่าจากฟอร์มตารางเวลาแต่ละแถวในหน้า UI
+  const rows = document.querySelectorAll('.schedule-row'); // ปรับ selector ให้ตรงกับ class แถวใน HTML ของคุณ
+  const times = [];
 
-// วาดตารางเวลาทั้งหมดใหม่จากค่าที่ดึงมาจาก API
-// ถ้าเครื่องนี้ยังไม่เคยตั้งเวลาไว้เลย จะใส่แถวเปล่า 1 แถวให้เริ่มกรอก
-function renderScheduleRows(times) {
-  const container = document.getElementById('scheduleListContainer');
-  container.innerHTML = '';
+  rows.forEach(row => {
+    // หา input เวลาและพอร์ชั่นในแต่ละแถว
+    const timeInput = row.querySelector('input[type="time"]'); // หรือ input สำหรับเวลา
+    const portionInput = row.querySelector('input[type="number"]'); // ช่องกรอกพอร์ชั่น
 
-  if (!Array.isArray(times) || times.length === 0) {
-    addScheduleRow('08:00', 1);
-    return;
-  }
-
-  times.forEach(item => {
-    const time = (typeof item === 'object' && item !== null) ? item.time : item;
-    const portion = (typeof item === 'object' && item !== null && item.portion) ? item.portion : 1;
-    if (time) addScheduleRow(time, portion);
-  });
-}
-
-// ดึงตารางเวลาที่เคยตั้งไว้ก่อนหน้าของเครื่องที่เลือกอยู่ มาแสดงในฟอร์มให้แก้ไขต่อได้
-async function fetchSchedule() {
-  const deviceId = getCurrentDevice();
-  const container = document.getElementById('scheduleListContainer');
-  const resultEl = document.getElementById('scheduleResult');
-  if (resultEl) resultEl.innerText = '';
-
-  if (!deviceId) {
-    container.innerHTML = '';
-    addScheduleRow('08:00', 1);
-    return;
-  }
-
-  container.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">⏳ กำลังโหลดตารางเวลาเดิม...</p>`;
-
-  const times = await fetchDeviceSchedule(deviceId);
-  deviceScheduleCache[deviceId] = times;
-  renderScheduleRows(times);
-}
-
-// แปลงค่าจาก input[type=time] ให้เป็นรูปแบบ 24 ชม. "HH:MM" เสมอ
-// (input[type=time] คืนค่า 24 ชม. อยู่แล้วตามสเปก แต่กันไว้เผื่อมีค่าติด AM/PM มาจากที่อื่น)
-function normalizeTimeValue(rawTime) {
-  let value = (rawTime || '').trim();
-  if (value.includes('AM') || value.includes('PM')) {
-    const [timePart, modifier] = value.split(' ');
-    let [hours, minutes] = timePart.split(':');
-    let h = parseInt(hours, 10);
-    if (modifier === 'PM' && h < 12) h += 12;
-    if (modifier === 'AM' && h === 12) h = 0;
-    value = `${String(h).padStart(2, '0')}:${minutes}`;
-  }
-  return value;
-}
-
-// ฟังก์ชันบันทึกตารางเวลาแยกพอร์ชั่นส่งเข้า API
-async function saveCustomSchedule() {
-  const deviceId = getCurrentDevice(); // ใช้ค่าจาก dropdown เลือกเครื่องโดยตรง ไม่ต้องพาร์สข้อความ label
-  const resultEl = document.getElementById('scheduleResult');
-
-  if (!deviceId) {
-    resultEl.innerText = "❌ กรุณาเลือกเครื่องก่อนบันทึกตารางเวลา";
-    resultEl.className = "text-xs text-center text-red-500 mt-2";
-    return;
-  }
-
-  const times = Array.from(document.querySelectorAll('.schedule-row')).reduce((acc, row) => {
-    const timeInput = row.querySelector('.time-input');
-    const portionInput = row.querySelector('.portion-input');
     if (timeInput && timeInput.value) {
-      acc.push({
-        time: normalizeTimeValue(timeInput.value),
+      times.push({
+        time: timeInput.value, // เช่น "08:45"
         portion: portionInput ? (parseInt(portionInput.value) || 1) : 1
       });
     }
-    return acc;
-  }, []);
+  });
 
-  if (times.length === 0) {
-    resultEl.innerText = "❌ บันทึกไม่สำเร็จ: กรุณาเพิ่มอย่างน้อย 1 มื้อ";
-    resultEl.className = "text-xs text-center text-red-500 mt-2";
+  // ตรวจสอบเบื้องต้นว่ามี device_id และมีข้อมูลมื้ออาหารไหม
+  if (!deviceId || times.length === 0) {
+    document.getElementById('scheduleResult').innerText = "❌ บันทึกไม่สำเร็จ: Missing device_id or times";
+    document.getElementById('scheduleResult').className = "text-xs text-center text-red-500";
     return;
   }
 
-  resultEl.innerText = "⏳ กำลังบันทึก...";
-  resultEl.className = "text-xs text-center text-gray-500 mt-2";
-
   try {
-    const response = await fetch(`${API_BASE}/api/feeder/set-schedule`, {
+    const response = await fetch('/api/feeder/set-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId, times })
+      body: JSON.stringify({
+        device_id: deviceId,
+        times: times // ส่งไปเป็นอาเรย์ของ Object เช่น [{time: "08:45", portion: 2}, ...]
+      })
     });
 
     const result = await response.json();
     if (result.success) {
-      resultEl.innerText = "✅ บันทึกตารางเวลาสำเร็จ!";
-      resultEl.className = "text-xs text-center text-green-500 mt-2";
-      deviceScheduleCache[deviceId] = times;
-      refreshAllDeviceCards(); // อัปเดต "ครั้งต่อไป" บนการ์ดให้ตรงกับตารางที่เพิ่งบันทึก
+      document.getElementById('scheduleResult').innerText = "✅ บันทึกตารางเวลาสำเร็จ!";
+      document.getElementById('scheduleResult').className = "text-xs text-center text-green-500";
     } else {
-      resultEl.innerText = "❌ บันทึกไม่สำเร็จ: " + (result.message || 'Unknown error');
-      resultEl.className = "text-xs text-center text-red-500 mt-2";
+      document.getElementById('scheduleResult').innerText = "❌ บันทึกไม่สำเร็จ: " + (result.message || 'Unknown error');
+      document.getElementById('scheduleResult').className = "text-xs text-center text-red-500";
     }
   } catch (err) {
     console.error(err);
-    resultEl.innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ";
-    resultEl.className = "text-xs text-center text-red-500 mt-2";
+    document.getElementById('scheduleResult').innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ";
+    document.getElementById('scheduleResult').className = "text-xs text-center text-red-500";
+  }
+}
+
+async function fetchSchedule() {
+  const deviceId = getCurrentDevice();
+  const times = await fetchDeviceSchedule(deviceId);
+  deviceScheduleCache[deviceId] = times;
+
+  // 1. เช็คก่อนว่ามี input ช่องนี้อยู่บนหน้าเว็บไหม
+  const scheduleInput = document.getElementById('scheduleInput');
+  if (scheduleInput) {
+    // แปลงโครงสร้าง times ให้เป็นสตริงเวลาธรรมดาก่อน join (เผื่อเป็น Object)
+    const timeStrings = Array.isArray(times) 
+      ? times.map(t => (typeof t === 'object' && t !== null ? t.time : t)) 
+      : [];
+    scheduleInput.value = timeStrings.join(', ');
+  } else {
+    console.warn("⚠️ ไม่พบ element id='scheduleInput' บนหน้า HTML (คาดว่าเปลี่ยนไปใช้ UI แบบตารางรายแถวแล้ว)");
+    
+    // ถ้าคุณเปลี่ยนไปใช้ UI แบบตารางเลือกเวลาและพอร์ชั่นหลายแถว 
+    // ให้เรียกฟังก์ชันสำหรับวาดแถวข้อมูลตรงนี้แทนได้เลย เช่น:
+    // renderScheduleTable(times); 
   }
 }
 

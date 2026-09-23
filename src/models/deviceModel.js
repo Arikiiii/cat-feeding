@@ -15,35 +15,50 @@ const ensureDeviceExists = (deviceId) => {
  * @param {string} deviceId - รหัสอุปกรณ์
  * @param {Array<string>|string} timesArray - อาเรย์เวลา เช่น ["08:00", "16:00"]
  */
-const updateDeviceSchedule = (deviceId, timesArray) => {
+const updateDeviceSchedule = (deviceId, timesArray, defaultPortion = 1) => {
     try {
         console.log(`⏳ กำลังอัปเดตตารางเวลา (Normalized) สำหรับ [${deviceId}]...`);
         
-        // แปลงให้เป็นอาเรย์เสมอ
-        const times = Array.isArray(timesArray) ? timesArray : timesArray.split(',');
+        // รองรับทั้งแบบส่งมาเป็นอาเรย์ของ String หรือ อาเรย์ของ Object {"time": "HH:MM", "portion": 2} หรือ String คั่นด้วย comma
+        let timeList = [];
+        if (Array.isArray(timesArray)) {
+            timeList = timesArray;
+        } else if (typeof timesArray === 'string') {
+            timeList = timesArray.split(',');
+        }
 
         // ใช้ Transaction เพื่อความปลอดภัย (ลบของเก่า Insert ของใหม่พร้อมกัน)
-        const updateTransaction = db.transaction((devId, timeList) => {
+        const updateTransaction = db.transaction((devId, list) => {
             ensureDeviceExists(devId);
 
             // ลบตารางเวลาเก่าทั้งหมดของเครื่องนี้ทิ้ง
             db.prepare('DELETE FROM schedules WHERE device_id = ?').run(devId);
 
-            // วนลูป Insert เวลาแต่ละมื้อลงไปเป็นแถวแยกกัน (Normalize 1NF)
-            const insertStmt = db.prepare('INSERT INTO schedules (device_id, feeding_time, last_updated) VALUES (?, ?, ?)');
+            // วนลูป Insert เวลาและ portion แต่ละมื้อลงไป (เพิ่มคอลัมน์ portion)
+            const insertStmt = db.prepare('INSERT INTO schedules (device_id, feeding_time, portion, last_updated) VALUES (?, ?, ?, ?)');
             const now = new Date().toISOString();
 
-            for (const time of timeList) {
-                if (time.trim()) {
-                    insertStmt.run(devId, time.trim(), now);
+            for (const item of list) {
+                let timeStr = '';
+                let pVal = defaultPortion;
+
+                if (typeof item === 'object' && item !== null) {
+                    timeStr = item.time ? item.time.trim() : '';
+                    pVal = item.portion !== undefined ? item.portion : defaultPortion;
+                } else if (typeof item === 'string') {
+                    timeStr = item.trim();
+                }
+
+                if (timeStr) {
+                    insertStmt.run(devId, timeStr, pVal, now);
                 }
             }
         });
 
-        updateTransaction(deviceId, times);
+        updateTransaction(deviceId, timeList);
 
         console.log(`✅ Schedule Updated (Normalized) for [${deviceId}] สำเร็จ`);
-        return { success: true, device_id: deviceId, times, lastUpdated: new Date().toISOString() };
+        return { success: true, device_id: deviceId, times: timeList, lastUpdated: new Date().toISOString() };
 
     } catch (error) {
         console.error('❌ เกิดข้อผิดพลาดในการอัปเดตตารางเวลา:', error.message);
@@ -52,13 +67,13 @@ const updateDeviceSchedule = (deviceId, timesArray) => {
 };
 
 /**
- * 2. ดึงตารางเวลา (รวมข้อมูลกลับมาเป็น Array ให้ใช้งานง่ายเหมือนเดิม)
+ * 2. ดึงตารางเวลา (รวมข้อมูลกลับมาเป็น Array หรือ Object ที่มีพอร์ชั่นครบถ้วน)
  */
 const getSchedulesFromSheet = (targetDeviceId = null) => {
     console.log(`⏳ Loading : schedule SQLite... (Device ID: ${targetDeviceId || 'All'})`);
     
     if (targetDeviceId) {
-        const stmt = db.prepare('SELECT feeding_time, last_updated FROM schedules WHERE device_id = ? ORDER BY feeding_time ASC');
+        const stmt = db.prepare('SELECT feeding_time, portion, last_updated FROM schedules WHERE device_id = ? ORDER BY feeding_time ASC');
         const rows = stmt.all(targetDeviceId);
 
         if (!rows || rows.length === 0) {
@@ -67,7 +82,8 @@ const getSchedulesFromSheet = (targetDeviceId = null) => {
 
         return {
             deviceId: targetDeviceId,
-            times: rows.map(r => r.feeding_time), // รวมกลับเป็น Array ตอนส่งออก
+            // ส่งกลับไปเป็นรูปแบบ Object ที่มีทั้ง time และ portion เพื่อให้ฝั่งอื่นเอาไปใช้ง่าย
+            times: rows.map(r => ({ time: r.feeding_time, portion: r.portion })),
             lastUpdated: rows[0].last_updated
         };
     } else {
@@ -79,16 +95,15 @@ const getSchedulesFromSheet = (targetDeviceId = null) => {
         }
 
         return devices.map(d => {
-            const rows = db.prepare('SELECT feeding_time, last_updated FROM schedules WHERE device_id = ? ORDER BY feeding_time ASC').all(d.device_id);
+            const rows = db.prepare('SELECT feeding_time, portion, last_updated FROM schedules WHERE device_id = ? ORDER BY feeding_time ASC').all(d.device_id);
             return {
                 deviceId: d.device_id,
-                times: rows.map(r => r.feeding_time),
+                times: rows.map(r => ({ time: r.feeding_time, portion: r.portion })),
                 lastUpdated: rows[0]?.last_updated
             };
         });
     }
 };
-
 /**
  * 3. ดึงข้อมูล Log ล่าสุดของอุปกรณ์
  */
@@ -161,9 +176,10 @@ const sendDataToGoogleSheet = (data) => {
         // ตรวจสอบว่ามี Device นี้ในระบบหรือยัง ถ้ายังให้สร้างตาราง devices รอไว้ (ป้องกัน Foreign Key Error)
         ensureDeviceExists(deviceId);
 
+        // 1. เพิ่มคอลัมน์ timestamp และใช้ DATETIME('now', '+7 hours') สำหรับเวลาไทย
         const stmt = db.prepare(`
-            INSERT INTO device_logs (device_id, hopper_weight, bowl_weight, status) 
-            VALUES (?, ?, ?, ?)
+            INSERT INTO device_logs (device_id, hopper_weight, bowl_weight, status, timestamp) 
+            VALUES (?, ?, ?, ?, DATETIME('now', '+7 hours'))
         `);
 
         // Map ชื่อฟิลด์จาก mqtt.js (hopper_weight_g, bowl_weight_g, feeder_status)
@@ -171,6 +187,7 @@ const sendDataToGoogleSheet = (data) => {
         const bowlWeight = data.bowl_weight_g !== undefined ? data.bowl_weight_g : data.bowlWeight;
         const status = data.feeder_status || data.status;
 
+        // 2. ตัด parameter timestamp ออกจาก .run() เพราะให้ SQL จัดการเวลาเอง
         stmt.run(deviceId, hopperWeight, bowlWeight, status);
         console.log(`📥 บันทึก Log ของ [${deviceId}] ลง SQLite สำเร็จ!`);
     } catch (error) {

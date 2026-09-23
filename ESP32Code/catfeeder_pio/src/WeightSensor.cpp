@@ -30,11 +30,11 @@ bool WeightSensor::update() {
     _connected = true;
     _lastReadyMillis = millis();
 
-    long raw = _scale.get_units(1);
-    _currentWeight = (float)raw;
+    float raw = _scale.get_units(1);
+    _currentWeight = raw;
 
-    if (_currentWeight < 0 && _currentWeight > -1.0f) {
-        _currentWeight = 0.0f;
+    if (_currentWeight < 0.0f) {
+         _currentWeight = 0.0f;
     }
     return true;
 }

@@ -20,6 +20,11 @@ const port = 3000;
 const mqtt_broker_url = 'mqtt://localhost:1883';
 const mqttTopic = 'catfeeder/control/data';
 
+const now = new Date();
+const thaiTimeOffset = 7 * 60 * 60 * 1000; // 7 ชั่วโมงเป็นมิลลิวินาที
+const thaiDate = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + thaiTimeOffset);
+const timestampThai = thaiDate.toISOString().replace('Z', '+07:00');
+
 // ====== MQTT Client Setup =====
 const client = mqttConnect(mqtt_broker_url, mqttTopic, (cleanData) => {
     console.log('📦 Data ready for SQLite:', cleanData);
@@ -108,7 +113,7 @@ app.get('/api/feeder/get-schedule', (req, res) => {
 });
 
 // ====== API Endpoint to Send Feed Command to ESP32 via MQTT ======
-const TOPIC_COMMAND = 'catfeeder/control/command';
+const TOPIC_COMMAND = 'catfeeder/control/command'; //สำหรับส่งคำสั่งไปยัง ESP32 
 const TOPIC_time =    'catfeeder/control/set-time';
 //=========================================
 // POST API Endpoints
@@ -124,7 +129,7 @@ app.post('/api/feeder/feed-now', (req, res) => {
         action: 'feed_now',
         device_id: device_id,
         portion: portion || 1,
-        timestamp: Date.now()
+        timestamp: timestampThai
     });
 
     client.publish(TOPIC_COMMAND, commandPayload, (err) => {
@@ -138,20 +143,21 @@ app.post('/api/feeder/feed-now', (req, res) => {
 });
 
 app.post('/api/feeder/set-schedule', (req, res) => {
-    const { device_id, times } = req.body; 
+    const { device_id, times, portion } = req.body; 
 
     if (!device_id || !times) {
         return res.status(400).json({ success: false, message: 'Missing device_id or times' });
     }
 
-    // เรียกฟังก์ชันอัปเดตตารางเวลา (SQLite)
-    const result = updateDeviceSchedule(device_id, times);
-    console.log(`SQLite  📅 Updated schedule for device [${device_id}] in SQLite:`, times);
+    // เรียกฟังก์ชันอัปเดตตารางเวลา (ส่ง portion เข้าไปด้วย ถ้ามี)
+    const result = updateDeviceSchedule(device_id, times, portion);
+    console.log(`SQLite  📅 Updated schedule for device [${device_id}] in SQLite:`, { times, portion });
+    
     const set_timePayload = JSON.stringify({
         action: 'set_schedule',
         device_id: device_id,
         times: times,
-        timestamp: Date.now()
+        timestamp: timestampThai
     });
 
     client.publish(TOPIC_time, set_timePayload, (err) => {

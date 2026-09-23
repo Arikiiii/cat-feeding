@@ -75,6 +75,7 @@ struct LastPublished {
 // ------------------- ตารางเวลา (เก็บใน Preferences) -------------------
 uint8_t scheduleHour[MAX_SCHEDULE_SLOTS];
 uint8_t scheduleMinute[MAX_SCHEDULE_SLOTS];
+uint8_t schedulePortion[MAX_SCHEDULE_SLOTS]; // ถ้าอยากแยกพอร์ชั่นแต่ละเวลา
 uint8_t scheduleCount = 0;
 int16_t lastTriggeredTotalMinutes = -1;   // กันยิงซ้ำในนาทีเดียวกัน
 
@@ -273,6 +274,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     String t = String(topic);
 
     if (t == TOPIC_COMMAND) {
+        // ถ้า payload มี device_id มาด้วย และไม่ตรงกับเครื่องนี้ ให้ข้าม
+        if (doc.containsKey("device_id")) {
+            const char* devId = doc["device_id"] | "";
+            if (strcmp(devId, DEVICE_ID) != 0) {
+                return;
+            }
+        }
+        
         const char* action = doc["action"] | "";
         if (strcmp(action, "feed_now") == 0) {
             uint8_t portion = doc["portion"] | 1;
@@ -280,7 +289,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             startFeeding(portion);
         }
     }
-    else if (t == TOPIC_SET_TIME) {
+   else if (t == TOPIC_SET_TIME) {
         // ถ้า payload มี device_id มาด้วย และไม่ตรงกับเครื่องนี้ ให้ข้าม
         if (doc.containsKey("device_id")) {
             const char* devId = doc["device_id"] | "";
@@ -292,22 +301,58 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         JsonArray times = doc["times"].as<JsonArray>();
         if (times.isNull()) return;
 
-        scheduleCount = 0;
+        // เริ่มบันทึกค่าลงตัวแปรชั่วคราวก่อน
+        uint8_t tempHours[MAX_SCHEDULE_SLOTS];
+        uint8_t tempMinutes[MAX_SCHEDULE_SLOTS];
+        uint8_t tempPortions[MAX_SCHEDULE_SLOTS];
+        uint8_t tempCount = 0;
+
+        // รองรับกรณีส่ง portion มาเป็นค่าเดียวรวม หรือส่งมาเป็นอาเรย์คู่กัน
+        uint8_t defaultPortion = doc["portion"] | 1;
+
         for (JsonVariant v : times) {
-            if (scheduleCount >= MAX_SCHEDULE_SLOTS) break;
-            // รองรับ format "HH:MM"
-            const char* timeStr = v.as<const char*>();
+            if (tempCount >= MAX_SCHEDULE_SLOTS) break;
+            
+            // รองรับทั้งแบบส่งมาเป็น String "HH:MM" หรือ Object {"time": "HH:MM", "portion": 2}
+            const char* timeStr = nullptr;
+            uint8_t pVal = defaultPortion;
+
+            if (v.is<JsonObject>()) {
+                JsonObject timeObj = v.as<JsonObject>();
+                timeStr = timeObj["time"] | "";
+                pVal = timeObj["portion"] | defaultPortion;
+            } else {
+                timeStr = v.as<const char*>();
+            }
+
             if (timeStr == nullptr) continue;
 
             int h = -1, m = -1;
             if (sscanf(timeStr, "%d:%d", &h, &m) == 2 && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-                scheduleHour[scheduleCount]   = (uint8_t)h;
-                scheduleMinute[scheduleCount] = (uint8_t)m;
-                scheduleCount++;
+                tempHours[tempCount]   = (uint8_t)h;
+                tempMinutes[tempCount] = (uint8_t)m;
+                tempPortions[tempCount]= pVal;
+                tempCount++;
             }
         }
-        saveScheduleToPrefs();
-        Serial.printf("📅 อัปเดตตารางเวลาแล้ว จำนวน %d รายการ\n", scheduleCount);
+
+        // อัปเดตเข้าตัวแปรหลักของเครื่อง
+        scheduleCount = tempCount;
+        for (int i = 0; i < scheduleCount; i++) {
+            scheduleHour[i]   = tempHours[i];
+            scheduleMinute[i] = tempMinutes[i];
+            schedulePortion[i]= tempPortions[i];
+        }
+
+        // บันทึกลง Flash Memory แบบอาเรย์ (ให้ตรงกับตอนโหลดด้วย getBytes)
+        prefs.begin(PREFS_NAMESPACE, false);
+        prefs.putUChar("count", scheduleCount);
+        prefs.putBytes("hours", scheduleHour, scheduleCount);
+        prefs.putBytes("mins", scheduleMinute, scheduleCount);
+        prefs.putBytes("portions", schedulePortion, scheduleCount);
+        prefs.end();
+
+        Serial.printf("💾 บันทึกตารางเวลาลง Flash เรียบร้อยแล้ว (%d รายการ)\n", scheduleCount);
     }
 }
 
@@ -326,8 +371,13 @@ void loadScheduleFromPrefs() {
     prefs.begin(PREFS_NAMESPACE, true);
     scheduleCount = prefs.getUChar("count", 0);
     if (scheduleCount > MAX_SCHEDULE_SLOTS) scheduleCount = MAX_SCHEDULE_SLOTS;
+    
     prefs.getBytes("hours", scheduleHour, scheduleCount);
     prefs.getBytes("mins", scheduleMinute, scheduleCount);
+    
+    // เพิ่มการโหลดพอร์ชั่นของแต่ละรอบเวลา
+    prefs.getBytes("portions", schedulePortion, scheduleCount);
+    
     prefs.end();
     Serial.printf("📂 โหลดตารางเวลาจากหน่วยความจำ: %d รายการ\n", scheduleCount);
 }
@@ -350,7 +400,7 @@ void checkSchedule() {
         int16_t slotMinutes = scheduleHour[i] * 60 + scheduleMinute[i];
         if (slotMinutes == totalMinutes) {
             Serial.printf("⏰ ถึงเวลาให้อาหารตามตาราง %02d:%02d\n", scheduleHour[i], scheduleMinute[i]);
-            startFeeding(1);
+            startFeeding(schedulePortion[i]);
             lastTriggeredTotalMinutes = totalMinutes;
             break;
         }
@@ -551,12 +601,12 @@ void updateDisplay() {
     // น้ำหนัก
     display.setCursor(0, 14);
     display.print("Hopper: ");
-    display.print(hopperSensor.getWeightGrams(), 0);
+    display.print(hopperSensor.getWeightGrams(), 1);
     display.println(" g");
 
     display.setCursor(0, 24);
     display.print("Bowl  : ");
-    display.print(bowlSensor.getWeightGrams(), 0);
+    display.print(bowlSensor.getWeightGrams(), 1);
     display.println(" g");
 
     // สถานะเครื่อง
