@@ -5,7 +5,7 @@
 #define WIFI_PASSWORD   "therapon"
 
 // ================== MQTT ==================
-#define MQTT_BROKER     "10.212.122.205"   // IP หรือ host ของ MQTT broker
+#define MQTT_BROKER     "10.65.253.205"   // IP หรือ host ของ MQTT broker
 #define MQTT_PORT       1883
 #define MQTT_CLIENT_ID  "catfeeder_001"
 #define DEVICE_ID       "catfeeder_001"   // ต้องตรงกับ device_id ที่ backend ใช้
@@ -32,6 +32,9 @@
 
 // น้ำหนักเปลี่ยนแปลงขั้นต่ำ (กรัม) ถึงจะถือว่า "เปลี่ยนจริง" แล้วค่อยส่งขึ้น MQTT
 #define WEIGHT_CHANGE_THRESHOLD_G  10.0f
+
+// ถ้าน้ำหนักในถาด (bowl) มากกว่าค่านี้ (กรัม) ถือว่าอาหารยังเหลือเยอะ -> ไม่ให้อาหารเพิ่ม
+#define BOWL_FULL_THRESHOLD_G      30.0f
 
 // ================== เซอร์โว ==================
 #define PIN_SERVO             15

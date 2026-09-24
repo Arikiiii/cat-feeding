@@ -4,6 +4,7 @@
 
 const API_BASE = ''; // ใช้โดเมนเดียวกันเพราะรันบน Express server ตัวเดียวกัน
 const DEFAULT_CAPACITY_G = 1000; // ค่าเริ่มต้นความจุถัง (g) ใช้คำนวณ % ถ้าไม่มีค่าจาก API
+const DEFAULT_BOWL_CAPACITY_G = 100; // ค่าเริ่มต้นความจุชาม (g) ใช้คำนวณ % ถ้าไม่มีค่าจาก API
 const AUTO_REFRESH_MS = 30000; // รีเฟรชสถานะทุกเครื่องอัตโนมัติทุก 30 วิ
 const DEVICE_COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#a855f7', '#ec4899', '#14b8a6'];
 
@@ -40,6 +41,24 @@ function editCapacity(deviceId) {
   const input = prompt(`ความจุเต็มถังของ ${deviceId} (กรัม) — ใช้คำนวณ %`, current);
   if (input && !isNaN(parseFloat(input))) {
     setCapacity(deviceId, parseFloat(input));
+    refreshAllDeviceCards();
+  }
+}
+
+function getBowlCapacity(deviceId) {
+  const stored = localStorage.getItem(`feeder_bowl_capacity_${deviceId}`);
+  return stored ? parseFloat(stored) : DEFAULT_BOWL_CAPACITY_G;
+}
+
+function setBowlCapacity(deviceId, value) {
+  localStorage.setItem(`feeder_bowl_capacity_${deviceId}`, value);
+}
+
+function editBowlCapacity(deviceId) {
+  const current = getBowlCapacity(deviceId);
+  const input = prompt(`ความจุเต็มชามของ ${deviceId} (กรัม) — ใช้คำนวณ %`, current);
+  if (input && !isNaN(parseFloat(input))) {
+    setBowlCapacity(deviceId, parseFloat(input));
     refreshAllDeviceCards();
   }
 }
@@ -202,6 +221,8 @@ function renderDeviceCard(deviceId, status, schedule) {
   const statusText = status ? (status.status || 'OK') : 'OFFLINE';
   const capacity = getCapacity(deviceId);
   const percent = capacity > 0 ? Math.min(100, Math.max(0, Math.round((hopperWeight / capacity) * 100))) : 0;
+  const bowlCapacity = getBowlCapacity(deviceId);
+  const bowlPercent = bowlCapacity > 0 ? Math.min(100, Math.max(0, Math.round((bowlWeight / bowlCapacity) * 100))) : 0;
   const nextFeed = getNextFeedInfo(schedule);
 
   const nextFeedHtml = nextFeed
@@ -230,9 +251,18 @@ function renderDeviceCard(deviceId, status, schedule) {
         <div class="text-xs text-gray-400 mt-1">${hopperWeight} g / ${capacity} g</div>
       </div>
 
-      <div class="flex justify-between text-sm mb-3">
-        <span class="text-gray-500">น้ำหนักชาม</span>
-        <span class="font-medium text-gray-700">${bowlWeight} g</span>
+      <div class="mb-3">
+        <div class="flex justify-between text-xs text-gray-500 mb-1">
+          <span>น้ำหนักชาม</span>
+          <span>
+            <button onclick="event.stopPropagation(); editBowlCapacity('${deviceId}')"
+              class="underline decoration-dotted hover:text-orange-600" title="ตั้งค่าความจุเต็มชาม">${bowlPercent}%</button>
+          </span>
+        </div>
+        <div class="w-full h-2.5 rounded-full weight-bar-track overflow-hidden">
+          <div class="h-full rounded-full weight-bar-fill ${weightBarClasses(bowlPercent)}" style="width:${bowlPercent}%"></div>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">${bowlWeight} g / ${bowlCapacity} g</div>
       </div>
 
       <div class="text-xs border-t pt-2 mt-2 flex justify-between items-center">

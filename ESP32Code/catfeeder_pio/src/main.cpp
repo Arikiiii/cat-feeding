@@ -111,7 +111,7 @@ void loadScheduleFromPrefs();
 void checkSchedule();
 bool getNextScheduleString(char* out, size_t outLen);
 void handleButton();
-void startFeeding(uint8_t portions);
+void startFeeding(uint8_t portions, bool checkBowlWeight = true);
 void updateFeedingStateMachine();
 void checkAndPublishIfChanged();
 void publishStatus(float hopperW, float bowlW);
@@ -285,8 +285,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         const char* action = doc["action"] | "";
         if (strcmp(action, "feed_now") == 0) {
             uint8_t portion = doc["portion"] | 1;
-            Serial.printf("📥 คำสั่ง feed_now จาก MQTT, portion=%d\n", portion);
-            startFeeding(portion);
+            Serial.printf("📥 คำสั่ง feed_now จาก MQTT (manual/หน้าเว็บ), portion=%d ไม่เช็คน้ำหนักถาด\n", portion);
+            startFeeding(portion, false); // manual: ไม่เช็คน้ำหนัก bowl
         }
     }
    else if (t == TOPIC_SET_TIME) {
@@ -446,8 +446,8 @@ void handleButton() {
         if (reading != buttonState) {
             buttonState = reading;
             if (buttonState == HIGH) { // กด (ใช้ INPUT_PULLUP: กด = LOW)
-                Serial.println("🔘 กดปุ่ม -> ปล่อยอาหารทันที");
-                startFeeding(1);
+                Serial.println("🔘 กดปุ่ม -> ปล่อยอาหารทันที (ไม่เช็คน้ำหนักถาด)");
+                startFeeding(1, false); // manual: ไม่เช็คน้ำหนัก bowl
             }
         }
     }
@@ -459,11 +459,23 @@ void handleButton() {
 // ============================================================
 
 
-void startFeeding(uint8_t portions) {
+void startFeeding(uint8_t portions, bool checkBowlWeight) {
     if (feedState != FS_IDLE) {
         Serial.println("⚠️ กำลังจ่ายอาหารอยู่ ข้ามคำสั่งซ้อน");
         return;
     }
+
+    // ถ้าในถาดยังมีอาหารเหลือเกินเกณฑ์ ไม่ต้องจ่ายเพิ่ม (กันอาหารล้นถาด)
+    // เช็คเฉพาะตอนเซนเซอร์ถาดเชื่อมต่ออยู่จริง ถ้าหลุดอยู่ก็ยังให้ทำงานตามปกติ
+    // ไม่งั้นถ้าเซนเซอร์เสีย เครื่องจะไม่มีวันให้อาหารได้เลย
+    // เช็คเฉพาะตอนให้อาหารอัตโนมัติตามตารางเวลาเท่านั้น (checkBowlWeight = true)
+    // ส่วนกดปุ่มที่ตัวเครื่อง / สั่งจากหน้าเว็บ (MQTT feed_now) ให้ข้ามเช็คนี้เสมอ
+    if (checkBowlWeight && bowlSensor.isConnected() && bowlSensor.getWeightGrams() > BOWL_FULL_THRESHOLD_G) {
+        Serial.printf("🚫 ข้ามการให้อาหารอัตโนมัติ: น้ำหนักในถาดยังเหลือ %.2f g (เกณฑ์ %.1f g)\n",
+                      bowlSensor.getWeightGrams(), BOWL_FULL_THRESHOLD_G);
+        return;
+    }
+
     if (portions == 0) portions = 1;
 
     portionsRemaining = portions;
@@ -558,10 +570,18 @@ void checkAndPublishIfChanged() {
 void publishStatus(float hopperW, float bowlW) {
     if (!mqttClient.connected()) return; // ออฟไลน์ก็แค่ข้าม รอบหน้าค่อยเช็คใหม่
 
+    // จำกัดทศนิยมเหลือ 2 ตำแหน่งแบบ string ก่อน แล้วค่อยแทรกเป็นตัวเลข JSON ดิบ
+    // (ถ้าแค่ปัดค่า float เฉยๆ ปัญหาการเก็บเลขฐาน 2 ของ float อาจทำให้ตอน serialize
+    //  หลุดทศนิยมยาวกลับมาได้อีก เช่น 82.33 อาจกลายเป็น 82.3299999...)
+    char hopperStr[16];
+    char bowlStr[16];
+    snprintf(hopperStr, sizeof(hopperStr), "%.2f", hopperW);
+    snprintf(bowlStr,   sizeof(bowlStr),   "%.2f", bowlW);
+
     StaticJsonDocument<256> doc;
     doc["device_id"]       = DEVICE_ID;
-    doc["hopper_weight_g"] = hopperW;
-    doc["bowl_weight_g"]   = bowlW;
+    doc["hopper_weight_g"] = serialized(hopperStr);
+    doc["bowl_weight_g"]   = serialized(bowlStr);
     doc["feeder_status"]   = statusToString(currentStatus);
 
     char buffer[256];
