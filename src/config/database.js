@@ -1,11 +1,12 @@
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 
 const dbPath = path.resolve(__dirname, '../../database/db_cat_feeder.db');
-const db = new Database(dbPath);
+const db = new DatabaseSync(dbPath);
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON'); // เปิดใช้งาน Foreign Key Constraints
+// node:sqlite ไม่มี db.pragma() แบบ better-sqlite3 ต้องใช้ db.exec() ยิง PRAGMA แทน
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON'); // เปิดใช้งาน Foreign Key Constraints
 
 // 1. ตารางอุปกรณ์ (Devices)
 db.exec(`
@@ -17,11 +18,14 @@ db.exec(`
 `);
 
 // 2. ตารางตารางเวลา (Schedules - Normalization แยกเวลาแต่ละมื้อเป็นแถวอิสระ)
+// หมายเหตุ: เพิ่มคอลัมน์ portion เข้ามาด้วย เพราะ deviceModel.js มีการ INSERT/SELECT
+// คอลัมน์นี้อยู่ แต่ตารางเดิมไม่มีคอลัมน์นี้ (จะทำให้ query พังถ้าไม่เพิ่ม)
 db.exec(`
   CREATE TABLE IF NOT EXISTS schedules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     device_id TEXT NOT NULL,
     feeding_time TEXT NOT NULL, -- เช่น "08:00"
+    portion INTEGER DEFAULT 1,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
   )

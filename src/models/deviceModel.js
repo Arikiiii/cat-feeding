@@ -28,32 +28,42 @@ const updateDeviceSchedule = (deviceId, timesArray, defaultPortion = 1) => {
         }
 
         // ใช้ Transaction เพื่อความปลอดภัย (ลบของเก่า Insert ของใหม่พร้อมกัน)
-        const updateTransaction = db.transaction((devId, list) => {
-            ensureDeviceExists(devId);
+        // หมายเหตุ: node:sqlite (DatabaseSync) ไม่มี db.transaction() แบบ better-sqlite3
+        // จึงต้องคุม transaction เองด้วย BEGIN / COMMIT / ROLLBACK
+        const updateTransaction = (devId, list) => {
+            db.exec('BEGIN TRANSACTION');
+            try {
+                ensureDeviceExists(devId);
 
-            // ลบตารางเวลาเก่าทั้งหมดของเครื่องนี้ทิ้ง
-            db.prepare('DELETE FROM schedules WHERE device_id = ?').run(devId);
+                // ลบตารางเวลาเก่าทั้งหมดของเครื่องนี้ทิ้ง
+                db.prepare('DELETE FROM schedules WHERE device_id = ?').run(devId);
 
-            // วนลูป Insert เวลาและ portion แต่ละมื้อลงไป (เพิ่มคอลัมน์ portion)
-            const insertStmt = db.prepare('INSERT INTO schedules (device_id, feeding_time, portion, last_updated) VALUES (?, ?, ?, ?)');
-            const now = new Date().toISOString();
+                // วนลูป Insert เวลาและ portion แต่ละมื้อลงไป (เพิ่มคอลัมน์ portion)
+                const insertStmt = db.prepare('INSERT INTO schedules (device_id, feeding_time, portion, last_updated) VALUES (?, ?, ?, ?)');
+                const now = new Date().toISOString();
 
-            for (const item of list) {
-                let timeStr = '';
-                let pVal = defaultPortion;
+                for (const item of list) {
+                    let timeStr = '';
+                    let pVal = defaultPortion;
 
-                if (typeof item === 'object' && item !== null) {
-                    timeStr = item.time ? item.time.trim() : '';
-                    pVal = item.portion !== undefined ? item.portion : defaultPortion;
-                } else if (typeof item === 'string') {
-                    timeStr = item.trim();
+                    if (typeof item === 'object' && item !== null) {
+                        timeStr = item.time ? item.time.trim() : '';
+                        pVal = item.portion !== undefined ? item.portion : defaultPortion;
+                    } else if (typeof item === 'string') {
+                        timeStr = item.trim();
+                    }
+
+                    if (timeStr) {
+                        insertStmt.run(devId, timeStr, pVal, now);
+                    }
                 }
 
-                if (timeStr) {
-                    insertStmt.run(devId, timeStr, pVal, now);
-                }
+                db.exec('COMMIT');
+            } catch (err) {
+                db.exec('ROLLBACK');
+                throw err;
             }
-        });
+        };
 
         updateTransaction(deviceId, timeList);
 
